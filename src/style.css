@@ -1,0 +1,142 @@
+/* ===== 全局样式：星历 EPHEMERIS 设计系统 ===== */
+
+:root {
+  /* 夜空与星云 */
+  --bg-night: #070B1E;
+  --bg-nebula: #232048;
+  /* 星金（香槟金）：标题、选中态、图表主线 */
+  --gold: #E8C47C;
+  --gold-dim: rgba(232, 196, 124, 0.55);
+  --gold-hairline: rgba(232, 196, 124, 0.18);
+  /* 文字：月白 / 暗紫灰 */
+  --ink: #E8E6F0;
+  --ink-dim: #8B87B0;
+  --ink-dim2: #A9A4CC;      /* 小号文字专用次级色（比 ink-dim 亮，保证可读） */
+  --ink-faint: rgba(139, 135, 176, 0.35);
+  /* 宜忌印色 */
+  --jade: #7FBF9E;
+  --cinnabar: #C25E5E;
+  /* 面板：低透明度星云紫 + 细描边 */
+  --panel-bg: rgba(35, 32, 72, 0.42);
+  /* 字体栈（均带优雅降级） */
+  --font-display: "ZCOOL XiaoWei", "Cormorant Garamond", "Noto Serif SC", serif;
+  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", system-ui, -apple-system, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  /* 始终预留纵向滚动条轨道，杜绝切换星座时的滚动条闪烁与横向位移 */
+  scrollbar-gutter: stable;
+  overflow-y: scroll; /* 兜底：不支持 scrollbar-gutter 的浏览器强制常驻滚动条 */
+}
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  /* 夜空 → 星云紫 的全页渐变 */
+  background: linear-gradient(165deg, #070B1E 0%, #10163A 48%, #232048 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+#app {
+  position: relative;
+  z-index: 1; /* 压在星空画布之上 */
+}
+
+/* 键盘可见焦点：金色描边 */
+:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: 3px;
+}
+
+/* 面板（原 glass-card）：收敛的玻璃感——低透明星云紫 + 1px 细金边 + 小圆角 */
+.glass-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--gold-hairline);
+  border-radius: 6px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* 卡片内部细分隔线 */
+.hairline {
+  border: none;
+  border-top: 1px solid rgba(139, 135, 176, 0.16);
+}
+
+/* 小 caps 眉题（eyebrow）：等宽字体，字号抬高后字距收敛 */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.2em;
+  color: var(--ink-dim);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* 星座星联：金点 + 细连线（全局，供星盘节点与卡片共用） */
+.constellation {
+  display: block;
+  overflow: visible;
+}
+.const-line {
+  stroke: var(--gold-dim);
+  stroke-width: 1;
+}
+.const-star {
+  fill: var(--gold);
+}
+
+/* 五维评分 ✦ 字形（实/空） */
+.glyphs {
+  letter-spacing: 0.28em;
+  font-size: 14px;
+}
+.glyphs .on {
+  color: var(--gold);
+  text-shadow: 0 0 8px rgba(232, 196, 124, 0.35);
+}
+.glyphs .off {
+  color: var(--ink-faint);
+}
+
+/* 简单旋转 spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid rgba(232, 196, 124, 0.18);
+  border-top-color: var(--gold);
+  animation: spin 0.9s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 减少动态偏好：关掉旋转/闪烁/描绘动画 */
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .mini-spinner {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
