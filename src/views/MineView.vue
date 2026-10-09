@@ -68,6 +68,7 @@
             {{ checkin && checkin.todayDone ? '今日已打卡 ✦' : busy ? '打卡中…' : '今日打卡' }}
           </button>
         </div>
+        <p v-if="ckError" class="error-line ck-err">{{ ckError }}</p>
       </section>
 
       <!-- ===== 历史记录 ===== -->
@@ -169,7 +170,14 @@ async function login() {
   busy.value = true
   error.value = ''
   try {
-    const d = await devLogin(nickname.value.trim() || '星语旅人')
+    let d
+    try {
+      d = await devLogin(nickname.value.trim() || '星语旅人')
+    } catch (e) {
+      // dev 通道后端已关闭（auth/dev 固定 500）：给用户能看懂的提示
+      error.value = '登录服务暂未开放，敬请期待'
+      return
+    }
     setToken(d.token)
     hasToken.value = true
     await loadAll()
@@ -177,12 +185,13 @@ async function login() {
     if (e.code === 401) onUnauthorized()
     else error.value = '无法连接星语服务器，请稍后再试'
   } finally {
-    busy.value = false
+    busy.value = false // 所有路径经 finally 复位，杜绝一直转圈
   }
 }
 
 /* ===== 打卡卡 ===== */
 const checkin = ref(null)
+const ckError = ref('') // 打卡失败提示（非 401 场景不吞错）
 
 // 最近 14 天点阵（旧 → 新，今天在最右）
 const dotDays = computed(() => {
@@ -205,11 +214,13 @@ const dotDays = computed(() => {
 
 async function doCheckin() {
   busy.value = true
+  ckError.value = ''
   try {
     checkin.value = await postCheckin() // 幂等：已打则返回既有状态
     loadSummary() // 打卡后刷新连续纪录与勋章（后台异步，不阻塞）
   } catch (e) {
     if (e.code === 401) onUnauthorized()
+    else ckError.value = '打卡失败，请稍后再试' // 非 401 失败明确提示，不无声复位
   } finally {
     busy.value = false
   }
@@ -595,6 +606,10 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+.ck-err {
+  text-align: right;
+  margin-top: 10px;
 }
 
 /* ===== 历史记录 ===== */

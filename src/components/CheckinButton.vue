@@ -7,6 +7,8 @@
       <template v-else-if="status">打卡 · 连续 {{ status.streak }} 天</template>
       <template v-else>签到</template>
     </button>
+    <!-- 打卡失败的短暂提示（3.5s 自动消失，绝对定位不占版面） -->
+    <span v-if="tip" class="ck-tip mono">{{ tip }}</span>
 
     <!-- 游客登录弹层：昵称 → dev 登录 → 立即完成今日打卡 -->
     <div v-if="modalOpen" class="ck-mask" @click.self="modalOpen = false">
@@ -75,9 +77,19 @@ async function doCheckin() {
     status.value = await postCheckin()
   } catch (e) {
     if (e.code === 401) onUnauthorized()
+    else showTip('打卡失败，请稍后再试') // 非 401 失败也要给用户明确反馈，不能无声
   } finally {
     busy.value = false
   }
+}
+
+// 头部按钮旁的短暂错误提示（打卡接口失败时）
+const tip = ref('')
+let tipTimer = null
+function showTip(t) {
+  tip.value = t
+  clearTimeout(tipTimer)
+  tipTimer = setTimeout(() => { tip.value = '' }, 3500)
 }
 
 // dev 登录成功 → 立即完成今日打卡
@@ -86,19 +98,32 @@ async function submit() {
   busy.value = true
   error.value = ''
   try {
-    const data = await devLogin(nickname.value.trim() || '星语旅人')
+    // 第一步：登录。dev 通道后端已关闭（auth/dev 固定 500），
+    // 必须给出用户能看懂的提示，而不是泛泛的「无法连接服务器」
+    let data
+    try {
+      data = await devLogin(nickname.value.trim() || '星语旅人')
+    } catch (e) {
+      error.value = '登录服务暂未开放，敬请期待'
+      return
+    }
     setToken(data.token)
     hasToken.value = true
-    status.value = await postCheckin()
-    modalOpen.value = false
-  } catch (e) {
-    if (e.code === 401) {
-      onUnauthorized()
-    } else {
-      error.value = '无法连接星语服务器，请稍后再试'
+    // 第二步：打卡。失败不吞错，弹层内提示并保留现场
+    try {
+      status.value = await postCheckin()
+    } catch (e) {
+      if (e.code === 401) {
+        onUnauthorized()
+        return
+      }
+      error.value = '打卡失败，请稍后再试'
+      loadStatus() // 尝试恢复状态，让头部按钮回到正确文案
+      return
     }
+    modalOpen.value = false
   } finally {
-    busy.value = false
+    busy.value = false // 所有路径（含 return）都经 finally 复位，杜绝一直转圈
   }
 }
 
@@ -111,6 +136,23 @@ onMounted(() => {
 <style scoped>
 .checkin {
   display: inline-flex;
+  position: relative; /* ck-tip 定位锚点 */
+}
+
+/* 打卡失败短提示：浮在按钮下方，不占版面 */
+.ck-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--cinnabar);
+  background: rgba(16, 22, 58, 0.92);
+  border: 1px solid rgba(194, 94, 94, 0.35);
+  border-radius: 4px;
+  padding: 4px 10px;
+  z-index: 30;
 }
 
 /* 小金边按钮 */
