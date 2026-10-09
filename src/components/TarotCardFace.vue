@@ -165,6 +165,10 @@ const backDots = [
   font-style: italic;
   font-weight: 500;
   color: var(--ink-dim);
+  white-space: nowrap; /* 英文名独立一行：不折行，绝不把单词折断 */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .face-bottom {
   width: 60%;
@@ -201,7 +205,7 @@ const backDots = [
 .sz-md .suit-seal { font-size: 15px; }
 
 .sz-sm .face-name { font-size: 13px; letter-spacing: 0.06em; }
-.sz-sm .face-en { font-size: 10px; }
+.sz-sm .face-en { display: none; } /* 空间紧张的小卡只显中文名（凯尔特十字/六芒星/牌库） */
 .sz-sm .suit-seal { font-size: 12px; }
 .sz-sm .face-top { font-size: 9px; letter-spacing: 0.08em; }
 .sz-sm .ori-tag { display: none; } /* 牌库小图不显示角签 */

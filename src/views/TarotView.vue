@@ -393,6 +393,11 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   flex-direction: column;
   gap: 16px;
 }
+.daily-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* 中文一行、英文独立一行 */
+}
 .daily-name .zh {
   font-family: var(--font-display);
   font-size: 32px;
@@ -405,7 +410,7 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   font-weight: 500;
   font-size: 18px;
   color: var(--ink-dim);
-  margin-left: 12px;
+  white-space: nowrap; /* 英文不折词 */
 }
 /* 正逆位大印章（与宜/忌同工艺） */
 .ori-seal {
@@ -847,6 +852,11 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   flex: 1;
   min-width: 0;
 }
+.m-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* 中文一行、英文独立一行 */
+}
 .m-title .zh {
   font-family: var(--font-display);
   font-size: 24px;
@@ -858,7 +868,7 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   font-style: italic;
   font-size: 15px;
   color: var(--ink-dim);
-  margin-left: 10px;
+  white-space: nowrap; /* 英文不折词 */
 }
 .m-block {
   margin-top: 16px;
