@@ -3,6 +3,10 @@
     <!-- 背景星空画布 -->
     <StarField />
 
+    <!-- ===== 后台管理页（URL #admin 直达，不进主导航；独立整页替换主站） ===== -->
+    <AdminView v-if="isAdmin" />
+    <template v-else>
+
     <!-- 顶部：眉题 + 词标 + 右侧今日日期 -->
     <header class="header">
       <div class="header-left">
@@ -36,6 +40,12 @@
         :class="{ active: view === 'bagua' }"
         @click="setView('bagua')"
       >八卦 <span class="tab-en">BAGUA</span></button>
+      <button
+        type="button"
+        class="view-tab mono"
+        :class="{ active: view === 'gua' }"
+        @click="setView('gua')"
+      >一卦 <span class="tab-en">DAILY GUA</span></button>
       <button
         type="button"
         class="view-tab mono"
@@ -92,6 +102,9 @@
     <!-- ===== 八卦视图（同塔罗：懒挂载 + 常驻） ===== -->
     <BaguaView v-if="baguaMounted" v-show="view === 'bagua'" />
 
+    <!-- ===== 每日一卦视图（同塔罗：懒挂载 + 常驻） ===== -->
+    <GuaTodayView v-if="guaMounted" v-show="view === 'gua'" />
+
     <!-- ===== 配对视图（同塔罗：懒挂载 + 常驻） ===== -->
     <MatchView v-if="matchMounted" v-show="view === 'match'" />
 
@@ -99,6 +112,7 @@
     <MineView v-if="mineMounted" v-show="view === 'mine'" />
 
     <footer class="footer mono">星语 STARWHISPER · 仅供娱乐 · 愿你被星辰温柔以待</footer>
+    </template>
   </div>
 </template>
 
@@ -111,18 +125,27 @@ import RadarChart from './components/RadarChart.vue'
 import TrendChart from './components/TrendChart.vue'
 import TarotView from './views/TarotView.vue'
 import BaguaView from './views/BaguaView.vue'
+import GuaTodayView from './views/GuaTodayView.vue'
 import MatchView from './views/MatchView.vue'
 import MineView from './views/MineView.vue'
+import AdminView from './views/AdminView.vue'
 import CheckinButton from './components/CheckinButton.vue'
 import { fetchSigns, fetchTodayFortune, fetchWeekFortune } from './api'
 
-/* ===== 视图切换：星运 / 塔罗 / 八卦 / 配对 / 我的（localStorage 持久化） ===== */
-const VALID_VIEWS = ['fortune', 'tarot', 'bagua', 'match', 'mine']
+/* ===== 后台管理页：URL #admin / #/admin 直达（不进主导航），监听 hash 变化可来回切换 ===== */
+const isAdmin = ref(/^#\/?admin$/.test(location.hash))
+window.addEventListener('hashchange', () => {
+  isAdmin.value = /^#\/?admin$/.test(location.hash)
+})
+
+/* ===== 视图切换：星运 / 塔罗 / 八卦 / 一卦 / 配对 / 我的（localStorage 持久化） ===== */
+const VALID_VIEWS = ['fortune', 'tarot', 'bagua', 'gua', 'match', 'mine']
 const savedView = localStorage.getItem('starwhisper:view')
 const view = ref(VALID_VIEWS.includes(savedView) ? savedView : 'fortune')
-// 塔罗/八卦/配对/我的视图首次进入才挂载（onMounted 自动拉内容），之后常驻保留状态
+// 塔罗/八卦/一卦/配对/我的视图首次进入才挂载（onMounted 自动拉内容），之后常驻保留状态
 const tarotMounted = ref(view.value === 'tarot')
 const baguaMounted = ref(view.value === 'bagua')
+const guaMounted = ref(view.value === 'gua')
 const matchMounted = ref(view.value === 'match')
 const mineMounted = ref(view.value === 'mine')
 function setView(v) {
@@ -130,6 +153,7 @@ function setView(v) {
   localStorage.setItem('starwhisper:view', v)
   if (v === 'tarot') tarotMounted.value = true
   if (v === 'bagua') baguaMounted.value = true
+  if (v === 'gua') guaMounted.value = true
   if (v === 'match') matchMounted.value = true
   if (v === 'mine') mineMounted.value = true
 }
@@ -214,7 +238,7 @@ async function init() {
   }
 }
 
-onMounted(init)
+onMounted(() => { if (!isAdmin.value) init() }) // 后台页无需拉运势
 </script>
 
 <style scoped>

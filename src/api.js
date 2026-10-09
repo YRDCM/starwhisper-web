@@ -119,3 +119,14 @@ export function fetchMe() {
 export function fetchHistory(type) {
   return http.get('/user/history', { params: type ? { type } : {} })
 }
+
+/** 每日一卦（v3 新契约）：{date, name, symbol, guaCi, interpretation, advice, luckLevel}；openid 可省略 */
+export function fetchHexagramToday(openid) {
+  return http.get('/hexagram/today', { params: openid ? { openid } : {} })
+}
+
+/** 后台统计（管理 key）：{userCount, todayNewUsers, todayActive, checkinTotal,
+ *  todayCheckins, tarotTotal, spreadDist:[{spread,count}], dailyNewUsers:[{date,count}]} */
+export function fetchAdminStats(key) {
+  return http.get('/admin/stats', { params: { key } })
+}

@@ -169,15 +169,15 @@ export function renderPoster(fortune, sign) {
   // 再把剩余空间按比例均分到各段间距，短文案不再塌出大空档，长文案也不挤。
   // 落款钉底 1080–1160 不变。
 
-  // ===== 顶部：词标 + 日期 =====
+  // ===== 顶部：词标（中英分行，杜绝写死 x 坐标导致重叠）+ 日期 =====
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
   ctx.fillStyle = C.gold
   ctx.font = `30px ${SERIF}`
-  ctx.fillText('星语', 60, 88)
+  ctx.fillText('星语', 60, 80)
   ctx.fillStyle = C.inkDim
-  ctx.font = `italic 20px ${SERIF}`
-  ctx.fillText('StarWhisper', 132, 88)
+  ctx.font = `italic 17px ${SERIF}`
+  ctx.fillText('StarWhisper', 62, 106)
 
   const d = new Date()
   const p = (n) => String(n).padStart(2, '0')
@@ -265,37 +265,54 @@ export function renderPoster(fortune, sign) {
   divider(ctx, y + Math.floor(gap * 0.4))
   y += gap
 
-  // ===== 幸运条目：紧凑等宽列（不再拉满整行），基线统一 =====
-  const LUCKY_COL = 150
-  lucky.forEach((it, i) => {
-    const x = 60 + i * LUCKY_COL
-    ctx.textAlign = 'left'
-    ctx.fillStyle = C.inkDim
-    ctx.font = `13px ${MONO}`
-    ctx.textBaseline = 'alphabetic'
-    ctx.fillText(it.label, x, y)
-    ctx.textBaseline = 'middle'
-    const vy = y + 34
-    if (it.color) {
-      ctx.fillStyle = it.color
-      ctx.beginPath()
-      ctx.arc(x + 9, vy, 9, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(232,230,240,0.4)'
-      ctx.stroke()
-      ctx.fillStyle = C.ink
-      ctx.font = `16px ${SANS}`
-      ctx.fillText(String(it.value ?? ''), x + 26, vy + 1)
-    } else if (it.label === '幸运数字') {
-      ctx.fillStyle = C.gold
-      ctx.font = `22px ${MONO}`
-      ctx.fillText(String(it.value ?? ''), x, vy + 1)
-    } else {
-      ctx.fillStyle = C.ink
-      ctx.font = `16px ${SANS}`
-      ctx.fillText(String(it.value ?? ''), x, vy + 1)
-    }
-  })
+  // ===== 幸运信息：单行分段流式排版（幸运色 墨绿色 · 数字 60 · 吉时 16:00-18:00），
+  // 光标推进替代写死列宽；量宽自适应字号，整体绝不超出安全边距（左右各 60px） =====
+  const LUCKY_MAXW = W - 120
+  // draw=false 时只量总宽：字号、间距与绘制完全同一路径，保证量得准
+  function luckyLine(font, draw, baseline) {
+    let lx = 60
+    lucky.forEach((it, i) => {
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'alphabetic'
+      ctx.font = `${font - 3}px ${MONO}`
+      if (draw) {
+        ctx.fillStyle = C.inkDim
+        ctx.fillText(it.label, lx, baseline)
+      }
+      lx += ctx.measureText(it.label).width + 8
+      if (it.color) {
+        if (draw) {
+          ctx.fillStyle = it.color
+          ctx.beginPath()
+          ctx.arc(lx + 8, baseline - Math.floor(font / 4), 8, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(232,230,240,0.4)'
+          ctx.lineWidth = 1
+          ctx.stroke()
+        }
+        lx += 24
+      }
+      ctx.font = `${font}px ${it.label === '幸运数字' ? MONO : SANS}`
+      const v = String(it.value ?? '')
+      if (draw) {
+        ctx.fillStyle = it.label === '幸运数字' ? C.gold : C.ink
+        ctx.fillText(v, lx, baseline)
+      }
+      lx += ctx.measureText(v).width
+      if (i < lucky.length - 1) {
+        if (draw) {
+          ctx.fillStyle = C.goldDim
+          ctx.font = `${font - 2}px ${SANS}`
+          ctx.fillText('·', lx + 10, baseline)
+        }
+        lx += 28
+      }
+    })
+    return lx - 60
+  }
+  let luckyFont = 16
+  while (luckyFont > 12 && luckyLine(luckyFont, false, 0) > LUCKY_MAXW) luckyFont -= 1
+  luckyLine(luckyFont, true, y + 38)
   ctx.textBaseline = 'alphabetic'
   y += LUCKY_H + gap
 
