@@ -1,7 +1,7 @@
 <template>
   <!-- 抽牌结果单卡：牌位标签 + 3D 翻牌（翻牌动画与 stagger 由 flipped/index 驱动） -->
   <div class="flip-card">
-    <p v-if="item.position" class="pos mono">{{ item.position }}</p>
+    <p v-if="item.position && !bare" class="pos mono">{{ item.position }}</p>
     <div class="flip" :class="{ flipped }">
       <div class="flip-inner" :style="{ transitionDelay: flipped ? index * 150 + 'ms' : '0ms' }">
         <div class="flip-back"><TarotCardFace faceDown :size="size" /></div>
@@ -20,7 +20,8 @@ defineProps({
   item: { type: Object, required: true },   // {card, orientation, position, keywords, meaning}
   flipped: { type: Boolean, default: false },
   index: { type: Number, default: 0 },      // stagger 序号
-  size: { type: String, default: 'md' }
+  size: { type: String, default: 'md' },
+  bare: { type: Boolean, default: false }   // 隐藏牌位标签（凯尔特障碍牌旋转 90° 时用）
 })
 </script>
 

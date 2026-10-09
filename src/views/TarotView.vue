@@ -39,17 +39,22 @@
     <section class="glass-card ritual">
       <h3 class="sec-title">抽牌仪式 <span class="sec-title-en mono">RITUAL</span></h3>
 
-      <!-- 牌阵选择器：4 个 mono chips，选中金边；切换即重置为待抽状态 -->
-      <div class="mode-row">
-        <button
-          v-for="s in SPREADS"
-          :key="s.key"
-          type="button"
-          class="mode-btn mono"
-          :class="{ active: spread === s.key }"
-          :disabled="drawing"
-          @click="setSpread(s.key)"
-        >{{ s.name }}</button>
+      <!-- 牌阵选择器：日常 / 进阶 分组 chips（标注牌数），选中金边；切换即重置为待抽状态 -->
+      <div class="spread-picker">
+        <div v-for="g in SPREAD_GROUPS" :key="g.label" class="spread-group">
+          <span class="sg-label mono">{{ g.label }} <i>{{ g.en }}</i></span>
+          <div class="sg-chips">
+            <button
+              v-for="s in g.spreads"
+              :key="s.key"
+              type="button"
+              class="mode-btn mono"
+              :class="{ active: spread === s.key }"
+              :disabled="drawing"
+              @click="setSpread(s.key)"
+            >{{ s.name }} <i class="cnt">{{ s.count }}</i></button>
+          </div>
+        </div>
       </div>
 
       <p v-if="drawError" class="error-line">{{ drawError }}</p>
@@ -96,12 +101,43 @@
         </div>
 
         <!-- love 爱情十字：3×3 布点（上=现实阻碍 左=你的状态 中=关系现状 右=对方的状态 下=结果与建议） -->
-        <div v-else class="love-cross">
+        <div v-else-if="layout === 'love'" class="love-cross">
           <TarotFlipCard class="c-top" :item="cardAt('现实阻碍')" :flipped="flipped" :index="3" size="sm" />
           <TarotFlipCard class="c-left" :item="cardAt('你的状态')" :flipped="flipped" :index="0" size="sm" />
           <TarotFlipCard class="c-center" :item="cardAt('关系现状')" :flipped="flipped" :index="2" />
           <TarotFlipCard class="c-right" :item="cardAt('对方的状态')" :flipped="flipped" :index="1" size="sm" />
           <TarotFlipCard class="c-bottom" :item="cardAt('结果与建议')" :flipped="flipped" :index="4" size="sm" />
+        </div>
+
+        <!-- celtic 凯尔特十字：左侧六牌十字（中央 现状核心 + 障碍挑战 横压 90°），右侧纵列牌杖 7→10 自下而上 -->
+        <div v-else-if="layout === 'celtic'" class="celtic-wrap">
+          <div class="celtic-cross">
+            <div class="cx-center">
+              <TarotFlipCard :item="cardAt('现状核心')" :flipped="flipped" :index="0" size="sm" />
+              <TarotFlipCard class="cx-cross" :item="cardAt('障碍与挑战')" :flipped="flipped" :index="1" size="sm" bare />
+            </div>
+            <TarotFlipCard class="cx-bottom" :item="cardAt('潜意识根源')" :flipped="flipped" :index="2" size="sm" />
+            <TarotFlipCard class="cx-left" :item="cardAt('过去的印记')" :flipped="flipped" :index="3" size="sm" />
+            <TarotFlipCard class="cx-top" :item="cardAt('显意识目标')" :flipped="flipped" :index="4" size="sm" />
+            <TarotFlipCard class="cx-right" :item="cardAt('未来的发展')" :flipped="flipped" :index="5" size="sm" />
+          </div>
+          <div class="celtic-staff">
+            <TarotFlipCard :item="cardAt('自我认知')" :flipped="flipped" :index="6" size="sm" />
+            <TarotFlipCard :item="cardAt('环境与外力')" :flipped="flipped" :index="7" size="sm" />
+            <TarotFlipCard :item="cardAt('希望与恐惧')" :flipped="flipped" :index="8" size="sm" />
+            <TarotFlipCard :item="cardAt('最终结果')" :flipped="flipped" :index="9" size="sm" />
+          </div>
+        </div>
+
+        <!-- hexagram 六芒星：上下顶点 + 左右四角，结果居心（grid-area 跨两行） -->
+        <div v-else-if="layout === 'hexagram'" class="hex-grid">
+          <TarotFlipCard class="hx-past" :item="cardAt('过去')" :flipped="flipped" :index="0" size="sm" />
+          <TarotFlipCard class="hx-present" :item="cardAt('现在')" :flipped="flipped" :index="1" size="sm" />
+          <TarotFlipCard class="hx-future" :item="cardAt('未来')" :flipped="flipped" :index="2" size="sm" />
+          <TarotFlipCard class="hx-block" :item="cardAt('阻碍')" :flipped="flipped" :index="3" size="sm" />
+          <TarotFlipCard class="hx-help" :item="cardAt('助力')" :flipped="flipped" :index="4" size="sm" />
+          <TarotFlipCard class="hx-advice" :item="cardAt('建议')" :flipped="flipped" :index="5" size="sm" />
+          <TarotFlipCard class="hx-result" :item="cardAt('结果')" :flipped="flipped" :index="6" />
         </div>
 
         <!-- 逐牌解读：关键词签 + 牌义段落 -->
@@ -114,6 +150,7 @@
                 {{ d.orientation === 'reversed' ? '逆位' : '正位' }}
               </span>
             </p>
+            <p v-if="d.positionDesc" class="m-posdesc">{{ d.positionDesc }}</p>
             <div class="kw-chips">
               <span v-for="(k, j) in splitKw(d.keywords)" :key="j" class="kw-chip mono">{{ k }}</span>
             </div>
@@ -215,12 +252,24 @@ async function loadDaily() {
   }
 }
 
-/* ===== 抽牌仪式（牌阵系统：single/three/choice/love） ===== */
-const SPREADS = [
-  { key: 'single', name: '单牌指引' },
-  { key: 'three', name: '时间之流' },
-  { key: 'choice', name: '二选一' },
-  { key: 'love', name: '爱情十字' }
+/* ===== 抽牌仪式（牌阵系统：日常 4 阵 + 进阶大牌阵 celtic/hexagram） ===== */
+const SPREAD_GROUPS = [
+  {
+    label: '日常', en: 'DAILY',
+    spreads: [
+      { key: 'single', name: '单牌指引', count: 1 },
+      { key: 'three', name: '时间之流', count: 3 },
+      { key: 'choice', name: '二选一', count: 3 },
+      { key: 'love', name: '爱情十字', count: 5 }
+    ]
+  },
+  {
+    label: '进阶', en: 'ADVANCED',
+    spreads: [
+      { key: 'celtic', name: '凯尔特十字', count: 10 },
+      { key: 'hexagram', name: '六芒星', count: 7 }
+    ]
+  }
 ]
 const spread = ref('single') // 当前牌阵
 const drawn = ref([])        // 抽到的牌（带 position 牌位）
@@ -228,9 +277,9 @@ const flipped = ref(false)   // 是否已翻开（驱动 3D 翻转动画）
 const drawing = ref(false)
 const drawError = ref('')
 
-// 摆牌方式：single/three 横排；choice 二选一分翼；love 十字
+// 摆牌方式：single/three 横排；choice 二选一分翼；love 十字；celtic 凯尔特十字；hexagram 六芒星
 const layout = computed(() =>
-  spread.value === 'choice' ? 'choice' : spread.value === 'love' ? 'love' : 'row'
+  ({ choice: 'choice', love: 'love', celtic: 'celtic', hexagram: 'hexagram' }[spread.value] || 'row')
 )
 
 // 按牌位名取牌（摆阵用；取不到时给兜底，避免模板崩）
@@ -238,8 +287,8 @@ function cardAt(position) {
   return drawn.value.find((d) => d.position === position) || drawn.value[0] || { card: {}, orientation: 'upright', position }
 }
 
-// 牌背展示数量跟随牌阵
-const backCount = computed(() => ({ single: 1, three: 3, choice: 3, love: 5 }[spread.value] || 3))
+// 牌背展示数量跟随牌阵（大牌阵一排放不下，封顶 6 张示意）
+const backCount = computed(() => Math.min({ single: 1, three: 3, choice: 3, love: 5, celtic: 10, hexagram: 7 }[spread.value] || 3, 6))
 
 function setSpread(s) {
   if (drawing.value) return
@@ -414,11 +463,44 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 .ritual {
   padding: 24px 30px 28px;
 }
-.mode-row {
+/* 牌阵选择器：日常 / 进阶 分组 */
+.spread-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0 22px;
+}
+.spread-group {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.sg-label {
+  flex: none;
+  width: 92px;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: var(--ink-dim2);
+}
+.sg-label i {
+  font-style: italic;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+.sg-chips {
   display: flex;
   gap: 12px;
-  margin: 16px 0 22px;
   flex-wrap: wrap;
+}
+.cnt {
+  font-style: normal;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--gold-dim);
+  margin-left: 6px;
 }
 .mode-btn {
   font-size: 13px;
@@ -553,6 +635,73 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 .c-right { grid-area: right; }
 .c-bottom { grid-area: bottom; }
 
+/* 凯尔特十字：左十字 + 右牌杖 */
+.celtic-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 48px;
+  padding: 6px 0 20px;
+}
+.celtic-cross {
+  display: grid;
+  grid-template-columns: 88px 88px 88px;
+  justify-content: center;
+  align-items: center;
+  gap: 20px 24px;
+  grid-template-areas:
+    ". ctop ."
+    "cleft ccenter cright"
+    ". cbottom .";
+}
+.cx-top { grid-area: ctop; }
+.cx-left { grid-area: cleft; }
+.cx-right { grid-area: cright; }
+.cx-bottom { grid-area: cbottom; }
+.cx-center {
+  grid-area: ccenter;
+  position: relative;
+  width: 88px;
+}
+/* 障碍牌：横压 90° 覆盖在现状核心之上（无标签，bare） */
+.cx-cross {
+  position: absolute;
+  top: 26px; /* 跳过基牌标签高度，使旋转中心与牌面中心重合 */
+  left: 0;
+  width: 88px;
+  transform: rotate(90deg);
+  z-index: 2;
+}
+.celtic-staff {
+  display: flex;
+  flex-direction: column-reverse; /* 牌杖 7→10 自下而上 */
+  gap: 18px;
+  width: 88px;
+  flex: none;
+}
+
+/* 六芒星：上下顶点 + 四角，结果居心跨两行 */
+.hex-grid {
+  display: grid;
+  grid-template-columns: 88px 104px 88px;
+  justify-content: center;
+  align-items: center;
+  gap: 18px 32px;
+  padding: 6px 0 20px;
+  grid-template-areas:
+    ". hfuture ."
+    "hpast hresult hpresent"
+    "hblock hresult hhelp"
+    ". hadvice .";
+}
+.hx-past { grid-area: hpast; }
+.hx-present { grid-area: hpresent; }
+.hx-future { grid-area: hfuture; }
+.hx-block { grid-area: hblock; }
+.hx-help { grid-area: hhelp; }
+.hx-advice { grid-area: hadvice; }
+.hx-result { grid-area: hresult; width: 104px; }
+
 /* 逐牌解读 */
 .meaning-panels {
   display: grid;
@@ -591,6 +740,15 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 }
 .m-ori.upright { color: var(--jade); }
 .m-ori.reversed { color: var(--cinnabar); }
+/* 牌位释义（大牌阵 positionDesc）：一句话说明这个牌位在问什么 */
+.m-posdesc {
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.8;
+  color: var(--ink-dim2);
+  padding-left: 10px;
+  border-left: 2px solid var(--gold-hairline);
+}
 .m-text {
   font-size: 14px;
   line-height: 1.9;
@@ -781,6 +939,53 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   }
   .love-cross > * {
     width: 130px;
+  }
+  /* 凯尔特十字：降级为纵列（障碍牌取消旋转与绝对定位，恢复正常站位） */
+  .celtic-wrap {
+    flex-direction: column;
+    gap: 20px;
+  }
+  .celtic-cross {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+  .celtic-cross > * {
+    width: 110px;
+  }
+  .cx-center {
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+  .cx-center > * {
+    width: 110px;
+  }
+  .cx-cross {
+    position: static;
+    transform: none;
+    width: 110px;
+  }
+  .celtic-staff {
+    flex-direction: column; /* 移动端恢复 7→10 自上而下自然阅读顺序 */
+    align-items: center;
+    width: auto;
+  }
+  .celtic-staff > * {
+    width: 110px;
+  }
+  /* 六芒星：降级为纵列 */
+  .hex-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+  .hex-grid > * {
+    width: 110px;
   }
   .card-grid {
     grid-template-columns: repeat(3, 1fr);
