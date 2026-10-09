@@ -91,13 +91,41 @@
           <li v-for="item in history" :key="item.id" class="hist-item">
             <button type="button" class="hist-head" @click="toggleExpand(item.id)">
               <span class="hist-type mono" :class="item.type.toLowerCase()">{{ typeLabel(item.type) }}</span>
-              <span class="hist-title">{{ item.title }}</span>
+              <span class="hist-title">{{ polishTitle(item.title) }}</span>
               <span class="hist-time mono">{{ formatTime(item.createdAt) }}</span>
               <span class="hist-toggle mono">{{ expandedId === item.id ? '−' : '+' }}</span>
             </button>
-            <p v-if="expandedId === item.id" class="hist-detail">{{ detailSummary(item) }}</p>
+            <!-- 结构化详情行：label 行（牌位/本卦/指数…）+ cont 续行（释义/点评） -->
+            <div v-if="expandedId === item.id" class="hist-detail">
+              <p v-for="(ln, i) in detailLines(item)" :key="i" class="hd-line" :class="{ cont: ln.cont }">
+                <span v-if="ln.label" class="hd-label mono">{{ ln.label }}</span>
+                <span class="hd-text">{{ ln.text }}</span>
+              </p>
+            </div>
           </li>
         </ul>
+      </section>
+
+      <!-- ===== 连续打卡横幅 + 勋章墙（汇总接口失败整块隐藏，与小程序一致） ===== -->
+      <section v-if="summary" class="glass-card streak-card">
+        <div class="streak-banner">
+          <span class="streak-flame" aria-hidden="true">🔥</span>
+          <div class="streak-main">
+            <p class="streak-num"><em class="mono">{{ summary.currentStreak }}</em> 天连续打卡</p>
+            <p class="streak-sub mono">最长纪录 {{ summary.maxStreak }} 天 · 累计 {{ summary.totalDays }} 天</p>
+          </div>
+          <span v-if="summary.todayChecked" class="streak-today mono">今日已打卡 ✓</span>
+        </div>
+        <template v-if="badges.length">
+          <div class="mini-divider"><i></i><span>✦</span><i></i></div>
+          <div class="badge-wall">
+            <div v-for="b in badges" :key="b.code" class="badge" :class="{ unlocked: b.unlocked }">
+              <span class="badge-star">{{ b.unlocked ? '★' : '☆' }}</span>
+              <span class="badge-name">{{ b.name }}</span>
+              <span class="badge-desc">{{ b.unlocked ? b.desc : b.progressText + ' · ' + b.desc }}</span>
+            </div>
+          </div>
+        </template>
       </section>
     </template>
   </div>
@@ -106,7 +134,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import {
-  getToken, setToken, devLogin, postCheckin, fetchCheckinStatus, fetchMe, fetchHistory
+  getToken, setToken, devLogin, postCheckin, fetchCheckinStatus, fetchCheckinSummary,
+  fetchMe, fetchHistory
 } from '../api'
 
 /* ===== 登录状态 ===== */
@@ -130,6 +159,7 @@ function onUnauthorized() {
   hasToken.value = false
   me.value = null
   checkin.value = null
+  summary.value = null
   history.value = []
 }
 
@@ -177,10 +207,32 @@ async function doCheckin() {
   busy.value = true
   try {
     checkin.value = await postCheckin() // 幂等：已打则返回既有状态
+    loadSummary() // 打卡后刷新连续纪录与勋章（后台异步，不阻塞）
   } catch (e) {
     if (e.code === 401) onUnauthorized()
   } finally {
     busy.value = false
+  }
+}
+
+/* ===== 连续打卡横幅 + 勋章墙（/checkin/summary；失败静默隐藏，与小程序一致） ===== */
+const summary = ref(null)
+
+// 勋章进度：连续类用 currentStreak，累计类（total*）用 totalDays
+const badges = computed(() => {
+  const s = summary.value
+  if (!s) return []
+  return (s.badges || []).map((b) => {
+    const cur = b.code.startsWith('total') ? s.totalDays : s.currentStreak
+    return { ...b, progressText: b.unlocked ? '' : `${Math.min(cur || 0, b.threshold)}/${b.threshold}` }
+  })
+})
+
+async function loadSummary() {
+  try {
+    summary.value = await fetchCheckinSummary(me.value ? me.value.id : undefined)
+  } catch (e) {
+    summary.value = null // 静默兜底：整块隐藏，不打扰用户
   }
 }
 
@@ -206,31 +258,82 @@ function formatTime(s) {
   return String(s).replace('T', ' ').slice(0, 16)
 }
 
-// detail 是 JSON 字符串，按类型解析摘要；解析失败降级显示 title，绝不崩
-function detailSummary(item) {
+// 标题展示层润色：配对原标题「星座配对 · 天秤座 × 狮子座 · 90分」太长会折行，
+// 重排为「天秤座 × 狮子座 · 契合度 90」；其他类型原样保留（CSS 保证单行省略）
+function polishTitle(title) {
+  const t = String(title || '')
+  const m = t.match(/^星座配对 · (.+?) × (.+?)(?: · (\d+)\s*分)?$/)
+  if (m) return m[3] ? `${m[1]} × ${m[2]} · 契合度 ${m[3]}` : `${m[1]} × ${m[2]}`
+  return t
+}
+
+// detail JSON 安全解析：失败 / 非对象都返回 null
+function safeParse(detail) {
   try {
-    const d = JSON.parse(item.detail)
-    if (item.type === 'TAROT' && Array.isArray(d)) {
-      // 塔罗：牌名 + 正逆位列表（带牌阵位置）
-      return d.map((x) => {
-        const ori = x.orientation === 'reversed' ? '逆位' : '正位'
-        const name = (x.card && x.card.name) || '未知牌'
-        return (x.position ? x.position + ' · ' : '') + `${name}（${ori}）`
-      }).join(' / ')
-    }
-    if (item.type === 'BAGUA' && d && d.primary) {
-      // 起卦：本卦 → 之卦
-      return `本卦 ${d.primary.name}` + (d.changed ? ` → 之卦 ${d.changed.name}` : '')
-    }
-    if (item.type === 'MATCH' && d && d.star1) {
-      // 配对：双方星座 + 综合分
-      const overall = d.scores && d.scores.overall != null ? d.scores.overall : '-'
-      return `${d.star1.name} × ${d.star2.name} · 综合 ${overall} 分`
-    }
+    const d = typeof detail === 'string' ? JSON.parse(detail) : detail
+    return d && typeof d === 'object' ? d : null
   } catch (e) {
-    // fallthrough：解析失败显示 title
+    return null
   }
-  return item.title
+}
+
+// detail → 结构化行 [{label, text, cont}]，按类型分派；解析失败兜底「暂无详情」，绝不糊原始 JSON
+function detailLines(item) {
+  const d = safeParse(item.detail)
+  if (item.type === 'TAROT') return tarotLines(d)
+  if (item.type === 'BAGUA') return baguaLines(d)
+  if (item.type === 'MATCH') return matchLines(d)
+  return [{ text: item.title || '暂无详情' }]
+}
+
+// 塔罗：detail 是 DrawResultVO JSON {spreadName, cards:[...]}（旧数据可能是裸数组）
+// → 每张牌：牌位行（牌名 · 正逆位 · 关键词）+ 牌位释义 / 解读续行
+function tarotLines(d) {
+  const cards = d && (Array.isArray(d) ? d : d.cards)
+  if (!Array.isArray(cards) || !cards.length) return [{ text: '暂无详情' }]
+  const lines = []
+  cards.forEach((dc, i) => {
+    const name = (dc.card && dc.card.name) || '未知牌'
+    const ori = dc.orientation === 'reversed' ? '逆位' : '正位'
+    const label = dc.position || (cards.length > 1 ? `第 ${i + 1} 张` : '牌面')
+    lines.push({ label, text: `${name} · ${ori}${dc.keywords ? ' · ' + dc.keywords : ''}` })
+    if (dc.positionDesc) lines.push({ cont: true, text: dc.positionDesc })
+    if (dc.meaning) lines.push({ cont: true, text: dc.meaning })
+  })
+  return lines
+}
+
+// 起卦：detail 是 CastVO JSON {primary, changed, linesDetail}
+// → 本卦 / 卦辞 / 象曰 / 变卦 / 变卦卦辞 / 动爻
+function baguaLines(c) {
+  if (!c || !c.primary) return [{ text: '暂无详情' }]
+  const p = c.primary
+  const hexLine = (h) =>
+    [h.symbol, h.name].filter(Boolean).join(' ') + (h.fortuneLevel ? ` · ${h.fortuneLevel}` : '')
+  const lines = [{ label: '本卦', text: hexLine(p) }]
+  if (p.judgment) lines.push({ label: '卦辞', text: p.judgment })
+  if (p.meaning) lines.push({ label: '象曰', text: p.meaning })
+  if (c.changed && c.changed.name && c.changed.name !== p.name) {
+    lines.push({ label: '变卦', text: hexLine(c.changed) })
+    if (c.changed.judgment) lines.push({ label: '变卦卦辞', text: c.changed.judgment })
+  }
+  const moving = (c.linesDetail || []).filter((l) => l.changing).map((l) => l.position)
+  if (moving.length) lines.push({ label: '动爻', text: `第 ${moving.join('、')} 爻` })
+  return lines
+}
+
+// 配对：detail 是 MatchVO JSON → 指数 / 点评 / 建议
+function matchLines(m) {
+  if (!m) return [{ text: '暂无详情' }]
+  const lines = []
+  const s = m.scores || {}
+  const scoreParts = [
+    ['综合', s.overall], ['爱情', s.love], ['友情', s.friendship], ['婚姻', s.marriage]
+  ].filter(([, v]) => v != null).map(([k, v]) => `${k} ${v}`)
+  if (scoreParts.length) lines.push({ label: '指数', text: scoreParts.join(' · ') })
+  if (m.review) lines.push({ label: '点评', text: m.review })
+  if (m.suggest) lines.push({ label: '建议', text: m.suggest })
+  return lines.length ? lines : [{ text: '暂无详情' }]
 }
 
 function toggleExpand(id) {
@@ -255,13 +358,13 @@ function setHistType(t) {
   loadHistory()
 }
 
-/* ===== 初始化：有 token 则并行拉取 用户/打卡/历史 ===== */
+/* ===== 初始化：有 token 则并行拉取 用户/打卡/历史/打卡汇总 ===== */
 async function loadAll() {
   try {
     const [meData, ckData] = await Promise.all([fetchMe(), fetchCheckinStatus()])
     me.value = meData
     checkin.value = ckData
-    await loadHistory()
+    await Promise.all([loadHistory(), loadSummary()])
   } catch (e) {
     if (e.code === 401) onUnauthorized()
   }
@@ -601,10 +704,132 @@ onMounted(() => {
 .hist-detail {
   margin: 0 16px 14px;
   padding: 10px 0 0;
+  border-top: 1px solid rgba(139, 135, 176, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hd-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   font-size: 13.5px;
   line-height: 1.9;
+  color: rgba(232, 230, 240, 0.88);
+}
+.hd-line.cont {
+  padding-left: 74px; /* 与 label 行正文对齐的续行（释义/点评） */
+  font-size: 13px;
   color: var(--ink-dim2);
-  border-top: 1px solid rgba(139, 135, 176, 0.12);
+}
+.hd-label {
+  flex: none;
+  width: 64px;
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  color: var(--gold-dim);
+  text-align: right;
+}
+
+/* ===== 连续打卡横幅 + 勋章墙 ===== */
+.streak-card {
+  padding: 22px 30px 26px;
+}
+.streak-banner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.streak-flame {
+  font-size: 34px;
+  filter: drop-shadow(0 0 10px rgba(232, 150, 80, 0.5));
+}
+.streak-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.streak-num {
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+.streak-num em {
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(232, 196, 124, 0.45);
+  margin-right: 4px;
+}
+.streak-sub {
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim2);
+}
+.streak-today {
+  flex: none;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--jade);
+  border: 1px solid rgba(127, 191, 158, 0.4);
+  border-radius: 4px;
+  padding: 6px 12px;
+}
+.mini-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 16px;
+  color: var(--gold-dim);
+  font-size: 11px;
+}
+.mini-divider i {
+  flex: 1;
+  border-top: 1px solid rgba(139, 135, 176, 0.16);
+}
+.badge-wall {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 14px 8px 12px;
+  border: 1px solid rgba(139, 135, 176, 0.16);
+  border-radius: 6px;
+  text-align: center;
+  opacity: 0.55; /* 未解锁灰显 */
+}
+.badge.unlocked {
+  opacity: 1;
+  border-color: var(--gold-hairline);
+  background: rgba(232, 196, 124, 0.05);
+}
+.badge-star {
+  font-size: 22px;
+  color: var(--ink-dim2);
+}
+.badge.unlocked .badge-star {
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(232, 196, 124, 0.6);
+}
+.badge-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+.badge-desc {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-dim2);
+  line-height: 1.6;
 }
 
 @media (max-width: 640px) {
@@ -613,8 +838,15 @@ onMounted(() => {
     gap: 16px;
   }
   .checkin-card,
-  .history-card {
+  .history-card,
+  .streak-card {
     padding: 20px 18px 22px;
+  }
+  .hd-line.cont {
+    padding-left: 0; /* 窄屏续行不缩进，避免挤占宽度 */
+  }
+  .streak-banner {
+    flex-wrap: wrap;
   }
   .dot-label {
     display: none; /* 窄屏只留点阵 */

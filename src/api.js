@@ -24,11 +24,12 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-// 统一拆包：code 非 200 视为业务错误；401 清 token 并标记 err.code 供上层识别
+// 统一拆包：code 200（旧契约）或 0（新契约，如 checkin/summary）均视为成功；
+// 其余视为业务错误；401 清 token 并标记 err.code 供上层识别
 http.interceptors.response.use(
   (resp) => {
     const body = resp.data
-    if (body && body.code === 200) {
+    if (body && (body.code === 200 || body.code === 0)) {
       return body.data
     }
     const err = new Error((body && body.message) || '服务返回异常')
@@ -108,6 +109,12 @@ export function postCheckin() {
 /** 打卡状态：{todayDone, streak, totalDays, recentDates}（需登录） */
 export function fetchCheckinStatus() {
   return http.get('/checkin/status')
+}
+
+/** 打卡汇总：{currentStreak, maxStreak, totalDays, todayChecked,
+ *  badges:[{code,name,desc,threshold,unlocked}]}；openid 可省略（新契约 code:0） */
+export function fetchCheckinSummary(openid) {
+  return http.get('/checkin/summary', { params: openid ? { openid } : {} })
 }
 
 /** 当前用户信息 + 历史统计：{id, nickname, avatarUrl, createdAt, historyCount, tarotCount, baguaCount}（需登录） */
