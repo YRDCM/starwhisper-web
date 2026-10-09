@@ -164,9 +164,10 @@ export function renderPoster(fortune, sign) {
     ctx.strokeRect(24, 24, W - 48, H - 48)
   }
 
-  // ===== 版面垂直配重（总高 1200 固定槽位分布）=====
-  // 头部 0–180：词标 + 分隔线；主体各段（星座名/评分/幸运/宜忌/点评）均分中段，
-  // 段间距按比例加大让版面呼吸均匀；点评后留 ~120 呼吸区；落款钉底 1080–1160。
+  // ===== 版面垂直配重（自适应版）=====
+  // 不再用固定槽位：先量出各段实际高度（评分行数 / 点评行数都随数据变），
+  // 再把剩余空间按比例均分到各段间距，短文案不再塌出大空档，长文案也不挤。
+  // 落款钉底 1080–1160 不变。
 
   // ===== 顶部：词标 + 日期 =====
   ctx.textBaseline = 'alphabetic'
@@ -205,7 +206,7 @@ export function renderPoster(fortune, sign) {
 
   drawConstellation(ctx, fortune.signName, W - 140, 224, 110)
 
-  // ===== 五维评分 ✦ 行 =====
+  // ===== 第一遍：量高 =====
   const dims = [
     { zh: '综合运势', score: fortune.overallScore },
     { zh: '爱情运势', score: fortune.loveScore },
@@ -214,13 +215,43 @@ export function renderPoster(fortune, sign) {
     { zh: '健康运势', score: fortune.healthScore }
   ].filter((x) => x.score != null)
 
-  let y = 350
+  const lucky = [
+    { label: '幸运色', value: fortune.luckyColor, color: COLOR_MAP[fortune.luckyColor] || '#8B87B0' },
+    { label: '幸运数字', value: fortune.luckyNumber },
+    { label: '吉时', value: fortune.luckyTime },
+    fortune.luckyDirection ? { label: '方位', value: fortune.luckyDirection } : null
+  ].filter(Boolean)
+
+  ctx.font = `15px ${SANS}`
+  const sealLines = Math.max(
+    wrapText(ctx, fortune.doText, 250).slice(0, 2).length,
+    wrapText(ctx, fortune.dontText, 250).slice(0, 2).length,
+    1
+  )
+  ctx.font = `17px ${SERIF}`
+  const sumLines = wrapText(ctx, fortune.summary, W - 120 - 20).slice(0, 5)
+
+  const FOOTER_TOP = H - 120          // 落款分隔线 y=1080，钉底
+  const CONTENT_TOP = 306             // 星座名块结束后的内容起点
+  const DIM_ROW = 46                  // 评分行高
+  const LUCKY_H = 78                  // 幸运条目块高
+  const sealH = sealLines * 26 + 14   // 宜忌块高
+  const sumH = sumLines.length * 32   // 点评块高
+  // 4 段内容之间的 5 个空隙（头前/段间×3/尾后）均分剩余空间，兜底最小 30
+  const gaps = 5
+  const leftover = FOOTER_TOP - CONTENT_TOP - (dims.length * DIM_ROW + LUCKY_H + sealH + sumH)
+  const gap = Math.max(30, Math.floor(leftover / gaps))
+
+  // ===== 第二遍：排版 =====
+  let y = CONTENT_TOP + gap
+
+  // 五维评分 ✦ 行
   ctx.font = `16px ${SANS}`
   for (const dim of dims) {
     ctx.textAlign = 'left'
     ctx.fillStyle = C.ink
     ctx.fillText(dim.zh, 60, y)
-    // ✦ 实 / ✧ 空
+    // ✦ 实 / 暗 空
     let gx = 210
     for (let n = 1; n <= 5; n++) {
       ctx.fillStyle = n <= dim.score ? C.gold : C.inkFaint
@@ -228,62 +259,61 @@ export function renderPoster(fortune, sign) {
       ctx.fillText('✦', gx, y)
       gx += 26
     }
-    y += 46
+    y += DIM_ROW
   }
 
-  divider(ctx, y + 8)
+  divider(ctx, y + Math.floor(gap * 0.4))
+  y += gap
 
-  // ===== 幸运条目：色块 / 数字 / 吉时 / 方位 =====
-  y += 72
-  const lucky = [
-    { label: '幸运色', value: fortune.luckyColor, color: COLOR_MAP[fortune.luckyColor] || '#8B87B0' },
-    { label: '幸运数字', value: fortune.luckyNumber },
-    { label: '吉时', value: fortune.luckyTime },
-    fortune.luckyDirection ? { label: '方位', value: fortune.luckyDirection } : null
-  ].filter(Boolean)
-  const colW = (W - 120) / lucky.length
+  // ===== 幸运条目：紧凑等宽列（不再拉满整行），基线统一 =====
+  const LUCKY_COL = 150
   lucky.forEach((it, i) => {
-    const x = 60 + i * colW
+    const x = 60 + i * LUCKY_COL
     ctx.textAlign = 'left'
     ctx.fillStyle = C.inkDim
     ctx.font = `13px ${MONO}`
+    ctx.textBaseline = 'alphabetic'
     ctx.fillText(it.label, x, y)
+    ctx.textBaseline = 'middle'
+    const vy = y + 34
     if (it.color) {
       ctx.fillStyle = it.color
       ctx.beginPath()
-      ctx.arc(x + 9, y + 27, 9, 0, Math.PI * 2)
+      ctx.arc(x + 9, vy, 9, 0, Math.PI * 2)
       ctx.fill()
       ctx.strokeStyle = 'rgba(232,230,240,0.4)'
       ctx.stroke()
       ctx.fillStyle = C.ink
       ctx.font = `16px ${SANS}`
-      ctx.fillText(String(it.value ?? ''), x + 26, y + 33)
+      ctx.fillText(String(it.value ?? ''), x + 26, vy + 1)
+    } else if (it.label === '幸运数字') {
+      ctx.fillStyle = C.gold
+      ctx.font = `22px ${MONO}`
+      ctx.fillText(String(it.value ?? ''), x, vy + 1)
     } else {
-      ctx.fillStyle = it.label === '幸运数字' ? C.gold : C.ink
-      ctx.font = it.label === '幸运数字' ? `24px ${MONO}` : `16px ${SANS}`
-      ctx.fillText(String(it.value ?? ''), x, y + 33)
+      ctx.fillStyle = C.ink
+      ctx.font = `16px ${SANS}`
+      ctx.fillText(String(it.value ?? ''), x, vy + 1)
     }
   })
+  ctx.textBaseline = 'alphabetic'
+  y += LUCKY_H + gap
 
   // ===== 宜 / 忌 印章 =====
-  y += 104
   drawSeal(ctx, 60, y, '宜', C.jade, fortune.doText, 250)
   drawSeal(ctx, W / 2 + 10, y, '忌', C.cinnabar, fortune.dontText, 250)
+  y += sealH + gap
 
   // ===== 点评（自动换行 + 避头尾，衬线斜体感用 serif 代替） =====
-  y += 104
-  // 金色左边框引文
+  // 金色左边框引文（上下各留 6px 呼吸，单行时也不再是悬空的短桩）
   ctx.strokeStyle = C.gold
   ctx.lineWidth = 2
   ctx.beginPath()
-  ctx.moveTo(60, y)
-  const sumFont = `17px ${SERIF}`
-  ctx.font = sumFont
-  const sumLines = wrapText(ctx, fortune.summary, W - 120 - 20).slice(0, 5)
-  ctx.moveTo(60, y)
-  ctx.lineTo(60, y + sumLines.length * 32 - 8)
+  ctx.moveTo(60, y - 4)
+  ctx.lineTo(60, y + sumH + 2)
   ctx.stroke()
   ctx.fillStyle = C.ink
+  ctx.font = `17px ${SERIF}`
   ctx.textAlign = 'left'
   sumLines.forEach((ln, i) => ctx.fillText(ln, 78, y + 20 + i * 32))
 
