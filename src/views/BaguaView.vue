@@ -629,6 +629,9 @@ onMounted(loadDaily) // 进入标签页即自动加载每日一卦
   font-size: 12.5px;
   letter-spacing: 0.14em;
   color: var(--ink-dim2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ===== 状态与错误 ===== */
