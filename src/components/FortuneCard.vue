@@ -64,16 +64,8 @@
       <span class="notice-text">{{ fortune.dayNotice }}</span>
     </div>
 
-    <!-- 宜 / 忌：黄历印章签 + 速配/贵人小签（SHOWAPI 为贵人） -->
-    <div class="seal-row">
-      <div class="seal do">
-        <span class="stamp">宜</span>
-        <span class="items">{{ fortune.doText }}</span>
-      </div>
-      <div class="seal dont">
-        <span class="stamp">忌</span>
-        <span class="items">{{ fortune.dontText }}</span>
-      </div>
+    <!-- 速配/贵人小签（pairSign 为 null 时整块隐藏；宜/忌黄历签已随「去伪」移除） -->
+    <div v-if="fortune.pairSignName" class="pair-row">
       <div class="pair">
         <span class="pair-label mono">MATCH · {{ pairLabel }}</span>
         <Constellation :sign="fortune.pairSignName" class="pair-const" />
@@ -334,47 +326,12 @@ const colorMap = {
   color: var(--ink-dim2);
 }
 
-/* 宜 / 忌印章签 + 速配/贵人 */
-.seal-row {
+/* 速配/贵人小签（宜/忌印章签已随「去伪」移除） */
+.pair-row {
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
   gap: 14px;
-}
-.seal {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(139, 135, 176, 0.16);
-  border-radius: 4px;
-  flex: 1 1 220px;
-}
-/* 印章：1px 同色描边 + 内阴影双线（轻微铅印感） */
-.stamp {
-  flex: none;
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 20px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 3px var(--bg-night), inset 0 0 0 4px currentColor;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
-}
-.seal.do .stamp {
-  color: var(--jade);
-}
-.seal.dont .stamp {
-  color: var(--cinnabar);
-}
-.items {
-  font-size: 14px;
-  line-height: 1.8;
-  color: var(--ink);
 }
 .pair {
   flex: none;

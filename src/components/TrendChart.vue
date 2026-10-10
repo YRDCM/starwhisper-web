@@ -29,7 +29,13 @@ const DIMS = [
   { key: 'healthScore', name: '健康', color: '#7FA8BF' }
 ]
 
+// 后端「去伪」后某维度可能整周为 null（如健康分）→ 整条线与图例一并剔除
+function activeDims() {
+  return DIMS.filter((d) => props.week.some((w) => w[d.key] != null))
+}
+
 function buildOption() {
+  const dims = activeDims()
   // x 轴取 MM-DD 格式的日期
   const dates = props.week.map((d) => (d.fortuneDate || '').slice(5))
   return {
@@ -41,9 +47,9 @@ function buildOption() {
       textStyle: { color: '#E8E6F0', fontFamily: MONO, fontSize: 12.5 }
     },
     legend: {
-      data: DIMS.map((d) => d.name),
+      data: dims.map((d) => d.name),
       // 默认只画"综合"线，其余维度通过点击图例开启
-      selected: { 综合: true, 爱情: false, 事业: false, 财运: false, 健康: false },
+      selected: Object.fromEntries(dims.map((d) => [d.name, d.key === 'overallScore'])),
       textStyle: { color: '#A9A4CC', fontFamily: MONO, fontSize: 13 },
       inactiveColor: 'rgba(139, 135, 176, 0.3)',
       itemWidth: 16,
@@ -67,7 +73,7 @@ function buildOption() {
       splitLine: { lineStyle: { color: 'rgba(139, 135, 176, 0.15)' } },
       axisLabel: { color: '#A9A4CC', fontFamily: MONO, fontSize: 12 }
     },
-    series: DIMS.map((d) => ({
+    series: dims.map((d) => ({
       name: d.name,
       type: 'line',
       smooth: true,

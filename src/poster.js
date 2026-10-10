@@ -102,26 +102,7 @@ function drawConstellation(ctx, signName, cx, cy, size) {
   }
 }
 
-/** 印章文字块：描边方框字（宜/忌）+ 内容 */
-function drawSeal(ctx, x, y, stamp, stampColor, text, maxW) {
-  ctx.strokeStyle = stampColor
-  ctx.lineWidth = 1
-  // 双线铅印感：外框 + 内缩 3px 内框
-  ctx.strokeRect(x, y, 34, 34)
-  ctx.strokeRect(x + 3, y + 3, 28, 28)
-  ctx.fillStyle = stampColor
-  ctx.font = `19px ${SERIF}`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(stamp, x + 17, y + 18)
-
-  ctx.fillStyle = C.ink
-  ctx.font = `15px ${SANS}`
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-  const lines = wrapText(ctx, text, maxW)
-  lines.slice(0, 2).forEach((ln, i) => ctx.fillText(ln, x + 46, y + 4 + i * 24))
-}
+/** 印章文字块已随「去伪」移除（宜/忌为无依据内容） */
 
 /**
  * 生成分享海报，返回 dataURL（image/png）
@@ -222,12 +203,6 @@ export function renderPoster(fortune, sign) {
     fortune.luckyDirection ? { label: '方位', value: fortune.luckyDirection } : null
   ].filter(Boolean)
 
-  ctx.font = `15px ${SANS}`
-  const sealLines = Math.max(
-    wrapText(ctx, fortune.doText, 250).slice(0, 2).length,
-    wrapText(ctx, fortune.dontText, 250).slice(0, 2).length,
-    1
-  )
   ctx.font = `17px ${SERIF}`
   const sumLines = wrapText(ctx, fortune.summary, W - 120 - 20).slice(0, 5)
 
@@ -235,12 +210,11 @@ export function renderPoster(fortune, sign) {
   const CONTENT_TOP = 306             // 星座名块结束后的内容起点
   const DIM_ROW = 46                  // 评分行高
   const LUCKY_H = 78                  // 幸运条目块高
-  const sealH = sealLines * 26 + 14   // 宜忌块高
   const sumH = sumLines.length * 32   // 点评块高
-  // 4 段内容之间的 5 个空隙（头前/段间×3/尾后）均分剩余空间，兜底最小 30
-  const gaps = 5
-  const leftover = FOOTER_TOP - CONTENT_TOP - (dims.length * DIM_ROW + LUCKY_H + sealH + sumH)
-  const gap = Math.max(30, Math.floor(leftover / gaps))
+  // 宜/忌移除后剩 3 段内容（评分 / 幸运 / 点评），4 个空隙（头前/段间×2/尾后）均分剩余空间，兜底最小 34
+  const gaps = 4
+  const leftover = FOOTER_TOP - CONTENT_TOP - (dims.length * DIM_ROW + LUCKY_H + sumH)
+  const gap = Math.max(34, Math.floor(leftover / gaps))
 
   // ===== 第二遍：排版 =====
   let y = CONTENT_TOP + gap
@@ -315,11 +289,6 @@ export function renderPoster(fortune, sign) {
   luckyLine(luckyFont, true, y + 38)
   ctx.textBaseline = 'alphabetic'
   y += LUCKY_H + gap
-
-  // ===== 宜 / 忌 印章 =====
-  drawSeal(ctx, 60, y, '宜', C.jade, fortune.doText, 250)
-  drawSeal(ctx, W / 2 + 10, y, '忌', C.cinnabar, fortune.dontText, 250)
-  y += sealH + gap
 
   // ===== 点评（自动换行 + 避头尾，衬线斜体感用 serif 代替） =====
   // 金色左边框引文（上下各留 6px 呼吸，单行时也不再是悬空的短桩）
