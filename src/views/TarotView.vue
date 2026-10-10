@@ -496,9 +496,10 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   margin-left: 4px;
 }
 .sg-chips {
-  display: flex;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* 均分宽度：日常 4 枚占满，进阶 2 枚同宽 */
   gap: 12px;
-  flex-wrap: wrap;
 }
 .cnt {
   font-style: normal;
@@ -508,9 +509,16 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   margin-left: 6px;
 }
 .mode-btn {
+  /* 统一宽高：宽度由网格均分，高度固定，内部排版一致（名称 + 牌数角标居中一行） */
+  width: 100%;
+  height: 44px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
   font-size: 13px;
   letter-spacing: 0.16em;
-  padding: 9px 20px;
   border-radius: 4px;
   border: 1px solid rgba(139, 135, 176, 0.25);
   background: none;
@@ -918,6 +926,15 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   }
   .ritual {
     padding: 20px 18px 24px;
+  }
+  /* 窄屏：牌阵按钮改 2 列网格，宽度依然均分 */
+  .spread-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .sg-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .backs-row {
     gap: 10px;
