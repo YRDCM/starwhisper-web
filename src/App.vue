@@ -111,13 +111,14 @@
     <!-- ===== 我的视图（同塔罗：懒挂载 + 常驻） ===== -->
     <MineView v-if="mineMounted" v-show="view === 'mine'" />
 
-    <footer class="footer mono">星语 STARWHISPER · 仅供娱乐 · 愿你被星辰温柔以待</footer>
+    <footer class="footer mono">星语 STARWHISPER · 仅供娱乐 · 愿你被星辰温柔以待 · v{{ APP_VERSION }}</footer>
     </template>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { APP_VERSION } from './config'
 import StarField from './components/StarField.vue'
 import SignWheel from './components/SignWheel.vue'
 import FortuneCard from './components/FortuneCard.vue'

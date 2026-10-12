@@ -129,11 +129,15 @@
         </template>
       </section>
     </template>
+
+    <!-- ===== 版本号（低调页脚小字，与小程序端同步） ===== -->
+    <p class="app-version mono">v{{ APP_VERSION }}</p>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { APP_VERSION } from '../config'
 import {
   getToken, setToken, devLogin, postCheckin, fetchCheckinStatus, fetchCheckinSummary,
   fetchMe, fetchHistory
@@ -845,6 +849,16 @@ onMounted(() => {
   letter-spacing: 0.06em;
   color: var(--ink-dim2);
   line-height: 1.6;
+}
+
+/* 版本号页脚：低调小字居中 */
+.app-version {
+  margin: 18px 0 4px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim);
+  opacity: 0.6;
 }
 
 @media (max-width: 640px) {
