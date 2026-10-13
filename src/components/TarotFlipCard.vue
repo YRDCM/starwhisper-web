@@ -1,11 +1,14 @@
 <template>
-  <!-- 抽牌结果单卡：牌位标签 + 3D 翻牌（翻牌动画与 stagger 由 flipped/index 驱动） -->
+  <!-- 抽牌结果单卡：牌位标签 + 用户主动揭晓 -->
   <div class="flip-card">
     <p v-if="item.position && !bare" class="pos mono">{{ item.position }}</p>
-    <div class="flip" :class="{ flipped }">
-      <div class="flip-inner" :style="{ transitionDelay: flipped ? index * 150 + 'ms' : '0ms' }">
-        <div class="flip-back"><TarotCardFace faceDown :size="size" /></div>
-        <div class="flip-front">
+    <div class="flip" :class="{ flipped, 'can-reveal': canReveal }"
+      :role="canReveal ? 'button' : undefined" :tabindex="canReveal ? 0 : undefined"
+      :aria-label="canReveal ? `揭晓第 ${index + 1} 张：${item.position || '单牌指引'}` : undefined"
+      @click="canReveal && $emit('reveal')" @keydown.enter.prevent="canReveal && $emit('reveal')" @keydown.space.prevent="canReveal && $emit('reveal')">
+      <div class="flip-inner">
+        <div class="flip-back" :aria-hidden="flipped"><TarotCardFace faceDown :size="size" /></div>
+        <div class="flip-front" :aria-hidden="!flipped">
           <TarotCardFace :card="item.card" :orientation="item.orientation" :size="size" />
         </div>
       </div>
@@ -15,17 +18,21 @@
 
 <script setup>
 import TarotCardFace from './TarotCardFace.vue'
+defineEmits(['reveal'])
 
 defineProps({
   item: { type: Object, required: true },   // {card, orientation, position, keywords, meaning}
   flipped: { type: Boolean, default: false },
-  index: { type: Number, default: 0 },      // stagger 序号
+  canReveal: { type: Boolean, default: false },
+  index: { type: Number, default: 0 },      // 牌位序号
   size: { type: String, default: 'md' },
   bare: { type: Boolean, default: false }   // 隐藏牌位标签（凯尔特障碍牌旋转 90° 时用）
 })
 </script>
 
 <style scoped>
+.can-reveal { cursor: pointer; border-radius: 10px; outline: 1px solid var(--gold); outline-offset: 4px; }
+.can-reveal:focus-visible { outline-width: 3px; }
 .flip-card {
   display: flex;
   flex-direction: column;
