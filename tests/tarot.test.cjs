@@ -11,12 +11,13 @@ function setup(storage = {}, api = {}) {
     .match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import .*$/gm, '')
   const context = { ref, computed, onMounted: () => {}, onUnmounted: () => {},
     drawTarot: api.drawTarot || (async () => ({ cards: [] })),
+    fetchTarotReading: api.fetchTarotReading,
     localStorage: {
       getItem: () => storage.value ?? null,
       setItem: (_, value) => { if (storage.fail) throw new Error('quota'); storage.value = value }
     }
   }
-  vm.runInNewContext(source + '\nthis.page = { drawn, revealedCount, nextCard, revealNext, revealAll, resetDraw, doDraw, daily, lessonOpen, markLearned, todayLearned, learnedCards, studyError, readLearnedCards, picking, drawError };', context)
+  vm.runInNewContext(source + '\nthis.page = { drawn, revealedCount, nextCard, revealNext, revealAll, resetDraw, doDraw, daily, lessonOpen, markLearned, todayLearned, learnedCards, studyError, readLearnedCards, picking, drawError, selectDetail, detailCard, detailIndex, drawId, readWithAi, aiLoading, aiResult, aiError };', context)
   return context.page
 }
 
@@ -62,4 +63,43 @@ test('空抽牌结果保留选牌并提示错误', async () => {
   await page.doDraw('1')
   assert.equal(page.picking.value, true)
   assert.match(page.drawError.value, /完整牌面/)
+})
+
+test('AI 仅在完全揭晓后请求，重复点击与重抽后的旧响应被忽略', async () => {
+  let resolveReading, calls = 0
+  const page = setup({}, {
+    drawTarot: async () => ({ drawId: 'a', cards: [{ card: { id: 1 } }, { card: { id: 2 } }] }),
+    fetchTarotReading: () => { calls++; return new Promise(resolve => { resolveReading = resolve }) }
+  })
+  await page.doDraw()
+  await page.readWithAi()
+  assert.equal(calls, 0)
+  page.revealAll()
+  page.selectDetail(1)
+  assert.equal(page.detailCard.value.card.id, 2)
+  page.selectDetail(99)
+  assert.equal(page.detailIndex.value, 1)
+  const pending = page.readWithAi()
+  await page.readWithAi()
+  assert.equal(calls, 1)
+  page.resetDraw()
+  resolveReading({ summary: '旧总览', detail: '旧详情' })
+  await pending
+  assert.equal(page.aiResult.value, null)
+  assert.equal(page.aiLoading.value, false)
+})
+
+test('AI 失败保留原牌面并允许重试，成功后不重复生成', async () => {
+  let calls = 0
+  const page = setup({}, {
+    drawTarot: async () => ({ drawId: 'a', cards: [{ card: { id: 1 } }] }),
+    fetchTarotReading: async () => { if (++calls === 1) throw new Error('暂不可用'); return { summary: '总览', detail: '详情' } }
+  })
+  await page.doDraw(); page.revealAll()
+  await page.readWithAi()
+  assert.equal(page.drawn.value.length, 1)
+  assert.equal(page.aiError.value, '暂不可用')
+  await page.readWithAi(); await page.readWithAi()
+  assert.equal(calls, 2)
+  assert.equal(page.aiResult.value.summary, '总览')
 })

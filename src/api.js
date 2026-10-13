@@ -90,6 +90,10 @@ export function fetchTarotCards() {
   return http.get('/tarot/cards')
 }
 
+export function fetchTarotReading(drawId, question) {
+  return http.post('/tarot/ai-reading', { drawId, question }, { timeout: 60000 })
+}
+
 /** 每日一卦（按日确定性出一卦） */
 export function fetchBaguaDaily() {
   return http.get('/bagua/daily')

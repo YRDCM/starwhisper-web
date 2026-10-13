@@ -137,7 +137,15 @@
           </div>
         </div>
         <!-- single / three：横排 -->
-        <div v-if="layout === 'row'" class="drawn-row" :class="{ three: drawn.length === 3 }">
+        <div v-if="drawn.length > 3" class="reading-nav" role="group" aria-label="牌面展示方式">
+          <button type="button" class="mode-btn" :class="{ active: compact }" @click="compact = true">紧凑展示</button>
+          <button type="button" class="mode-btn" :class="{ active: !compact }" @click="compact = false">经典牌阵</button>
+        </div>
+        <div v-if="drawn.length > 3 && compact" class="compact-cards">
+          <TarotFlipCard v-for="(d, i) in drawn" :key="i" :item="d" :index="i" size="sm"
+            :flipped="i < revealedCount" :can-reveal="i === revealedCount" @reveal="revealNext" />
+        </div>
+        <div v-else-if="layout === 'row'" class="drawn-row" :class="{ three: drawn.length === 3 }">
           <TarotFlipCard
             v-for="(d, i) in drawn"
             :key="d.card.id + '-' + i"
@@ -204,8 +212,12 @@
         </div>
 
         <!-- 逐牌解读：关键词签 + 牌义段落 -->
-        <div class="meaning-panels">
-          <div v-for="(d, i) in drawn.slice(0, revealedCount)" :key="'m' + d.card.id + '-' + i" class="m-panel">
+        <div v-if="revealedCount" class="reading-nav" role="group" aria-label="选择牌位解读">
+          <button v-for="(d, i) in drawn.slice(0, revealedCount)" :key="i" type="button" class="mode-btn"
+            :class="{ active: detailIndex === i }" :aria-pressed="detailIndex === i" @click="selectDetail(i)">{{ i + 1 }} · {{ d.position || '指引' }}</button>
+        </div>
+        <div class="meaning-panels focused-reading" aria-live="polite">
+          <div v-for="d in detailCard ? [detailCard] : []" :key="detailIndex" class="m-panel">
             <p class="m-head">
               <span v-if="d.position" class="m-pos mono">{{ d.position }}</span>
               <span class="m-name">{{ d.card.name }}</span>
@@ -217,8 +229,29 @@
             <div class="kw-chips">
               <span v-for="(k, j) in splitKw(d.keywords)" :key="j" class="kw-chip mono">{{ k }}</span>
             </div>
-            <p class="m-text">{{ d.meaning }}</p>
+            <button type="button" class="detail-toggle" :aria-expanded="meaningOpen" @click="meaningOpen = !meaningOpen">{{ meaningOpen ? '收起完整牌义 −' : '展开完整牌义 +' }}</button>
+            <p v-if="meaningOpen" class="m-text">{{ d.meaning }}</p>
           </div>
+        </div>
+
+        <div class="ai-reading">
+          <p class="m-label">Kimi · AI 解牌 <span class="ai-badge">游客可用</span></p>
+          <p v-if="!drawId" class="spread-hint">AI 解牌暂未启用，基础牌义仍可正常阅读。</p>
+          <template v-else>
+            <label for="tarot-question" class="spread-hint">你想梳理什么？（选填，最多 300 字）</label>
+            <textarea id="tarot-question" v-model="aiQuestion" maxlength="300" rows="2" :disabled="aiLoading || !!aiResult"
+              placeholder="例如：面对新的工作机会，我可以从哪些方面思考？" />
+            <p class="ai-note">点击后会将问题与牌面发送给 Kimi，仅供娱乐与自我探索。每组牌生成一次，同一网络有每日限额。</p>
+            <button v-if="!aiResult" type="button" class="t-btn" :disabled="aiLoading || !!nextCard" @click="readWithAi">
+              {{ aiLoading ? '正在结合牌阵解读…' : nextCard ? '全部揭晓后可 AI 解牌' : '用 Kimi 解读这组牌' }}
+            </button>
+            <p v-if="aiError" class="error-line" role="alert">{{ aiError }}</p>
+            <div v-if="aiResult" class="ai-result" aria-live="polite">
+              <p class="m-text">{{ aiResult.summary }}</p>
+              <button type="button" class="detail-toggle" :aria-expanded="aiExpanded" @click="aiExpanded = !aiExpanded">{{ aiExpanded ? '收起详细解读 −' : '牌阵联系与行动建议 +' }}</button>
+              <p v-if="aiExpanded" class="m-text ai-detail">{{ aiResult.detail }}</p>
+            </div>
+          </template>
         </div>
 
         <div class="stage-actions">
@@ -306,7 +339,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import TarotCardFace from '../components/TarotCardFace.vue'
 import TarotFlipCard from '../components/TarotFlipCard.vue'
-import { fetchTarotDaily, drawTarot, fetchTarotCards } from '../api'
+import { fetchTarotDaily, drawTarot, fetchTarotCards, fetchTarotReading } from '../api'
 
 /* ===== 每日塔罗 ===== */
 const daily = ref(null)
@@ -360,8 +393,38 @@ const spreadHints = {
 const drawn = ref([])        // 抽到的牌（带 position 牌位）
 const revealedCount = ref(0)
 const nextCard = computed(() => drawn.value[revealedCount.value])
-function revealNext() { if (nextCard.value) revealedCount.value++ }
-function revealAll() { revealedCount.value = drawn.value.length }
+function revealNext() { if (nextCard.value) { revealedCount.value++; selectDetail(revealedCount.value - 1) } }
+function revealAll() { revealedCount.value = drawn.value.length; selectDetail(0) }
+const compact = ref(true)
+const detailIndex = ref(0)
+const meaningOpen = ref(false)
+const detailCard = computed(() => detailIndex.value < revealedCount.value ? drawn.value[detailIndex.value] : null)
+function selectDetail(i) { if (i >= 0 && i < revealedCount.value) { detailIndex.value = i; meaningOpen.value = drawn.value.length === 1 } }
+const drawId = ref('')
+const aiQuestion = ref('')
+const aiLoading = ref(false)
+const aiResult = ref(null)
+const aiError = ref('')
+const aiExpanded = ref(false)
+function clearReading() {
+  drawId.value = ''; aiLoading.value = false; aiResult.value = null; aiError.value = ''; aiExpanded.value = false
+  detailIndex.value = 0; meaningOpen.value = false
+}
+async function readWithAi() {
+  if (!drawId.value || nextCard.value || aiLoading.value || aiResult.value) return
+  const id = drawId.value
+  aiLoading.value = true; aiError.value = ''
+  try {
+    const result = await fetchTarotReading(id, aiQuestion.value.trim())
+    if (disposed || id !== drawId.value) return
+    if (!result?.summary || !result?.detail) throw new Error('未收到完整解读，请稍后重试')
+    aiResult.value = result
+  } catch (e) {
+    if (!disposed && id === drawId.value) aiError.value = e.message || '解读失败，请稍后重试'
+  } finally {
+    if (!disposed && id === drawId.value) aiLoading.value = false
+  }
+}
 const drawing = ref(false)
 const drawError = ref('')
 let disposed = false
@@ -445,6 +508,7 @@ function setSpread(s) {
 
 async function doDraw(cardNos) {
   if (drawing.value) return
+  clearReading()
   revealedCount.value = 0
   drawing.value = true
   drawError.value = ''
@@ -453,6 +517,7 @@ async function doDraw(cardNos) {
     if (disposed) return
     if (!result?.cards?.length) throw new Error('未收到完整牌面，请重新尝试')
     drawn.value = result.cards
+    drawId.value = result.drawId || ''
     cancelPick()
   } catch (e) {
     drawError.value = e.message || '无法连接星语服务器，请稍后再试'
@@ -463,6 +528,7 @@ async function doDraw(cardNos) {
 }
 
 function resetDraw() {
+  clearReading()
   drawn.value = []
   revealedCount.value = 0
   drawError.value = ''
@@ -1369,5 +1435,27 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
     flex-direction: column;
     align-items: center;
   }
+}
+.reading-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.reading-nav .mode-btn { width: auto; height: auto; min-height: 36px; font-size: 12px; padding: 8px 12px; letter-spacing: .04em; }
+.compact-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 110px)); justify-content: center; gap: 22px 18px; margin: 24px 0; }
+.compact-cards :deep(.pos) { font-size: 11px; letter-spacing: .02em; white-space: normal; min-height: 30px; }
+.focused-reading { display: block; margin-top: 12px; }
+.focused-reading .m-panel { gap: 8px; padding: 16px; }
+.focused-reading .m-name { font-size: 17px; }
+.focused-reading .m-text, .ai-reading .m-text { font-size: 14px; line-height: 1.85; }
+.detail-toggle { display: block; width: fit-content; padding: 8px 0; background: transparent; border: 0; color: var(--gold); font: inherit; font-size: 13px; cursor: pointer; }
+.ai-reading { margin-top: 22px; padding: 20px; border: 1px solid var(--gold-hairline); border-radius: 12px; }
+.ai-badge { font-size: 11px; letter-spacing: .03em; color: var(--ink-dim); }
+.ai-reading label { display: block; margin: 12px 0 8px; }
+.ai-reading textarea { box-sizing: border-box; width: 100%; resize: vertical; min-height: 80px; max-height: 220px; padding: 12px; color: var(--ink); background: rgba(0,0,0,.15); border: 1px solid var(--gold-hairline); border-radius: 8px; font: inherit; font-size: 14px; line-height: 1.6; }
+.ai-reading textarea:focus { outline: 1px solid var(--gold); }
+.ai-note { color: var(--ink-dim); font-size: 12px; line-height: 1.7; margin: 10px 0 16px; }
+.ai-detail { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ai-result { margin-top: 14px; }
+@media (max-width: 640px) {
+  .compact-cards { grid-template-columns: repeat(3, minmax(0, 96px)); gap: 18px 12px; }
+  .ai-reading { padding: 16px; }
+  .ai-reading .t-btn { width: 100%; padding-left: 8px; padding-right: 8px; font-size: 13px; }
 }
 </style>
