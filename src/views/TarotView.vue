@@ -59,16 +59,50 @@
 
       <p v-if="drawError" class="error-line">{{ drawError }}</p>
 
-      <!-- 抽牌前：一排牌背 -->
+      <!-- 抽牌前：选牌模式（78 张暗置牌背）或一排牌背入口 -->
       <template v-if="!drawn.length">
-        <div class="backs-row">
-          <TarotCardFace v-for="n in backCount" :key="n" faceDown size="md" class="back-item" />
+        <!-- 自行选牌：78 张暗置牌背网格，点选金边亮起、可取消，选满后确认开牌 -->
+        <div v-if="picking" class="pick-stage">
+          <div class="pick-head">
+            <span class="pick-progress mono">已选 {{ picked.length }}/{{ needCount }}</span>
+            <span class="pick-hint">凭直觉点选 {{ needCount }} 张牌背，再次点击可取消</span>
+          </div>
+          <div class="pick-grid">
+            <button
+              v-for="no in deck"
+              :key="no"
+              type="button"
+              class="pick-cell"
+              :class="{ chosen: picked.includes(no) }"
+              :disabled="drawing"
+              @click="togglePick(no)"
+            >
+              <TarotCardFace faceDown size="sm" />
+              <span v-if="pickOrder(no)" class="pick-order mono">{{ pickOrder(no) }}</span>
+            </button>
+          </div>
+          <div class="stage-actions pick-actions">
+            <button
+              type="button"
+              class="t-btn draw-btn"
+              :disabled="picked.length !== needCount || drawing"
+              @click="confirmPick"
+            >{{ drawing ? '开牌中…' : '确认开牌' }}</button>
+            <button type="button" class="t-btn ghost" :disabled="drawing" @click="randomDraw">随机为我抽</button>
+            <button type="button" class="t-btn ghost" :disabled="drawing" @click="cancelPick">返回</button>
+          </div>
         </div>
-        <div class="stage-actions">
-          <button type="button" class="t-btn draw-btn" :disabled="drawing" @click="doDraw">
-            {{ drawing ? '洗牌抽牌中…' : '开始抽牌' }}
-          </button>
-        </div>
+
+        <template v-else>
+          <div class="backs-row">
+            <TarotCardFace v-for="n in backCount" :key="n" faceDown size="md" class="back-item" />
+          </div>
+          <div class="stage-actions">
+            <button type="button" class="t-btn draw-btn" :disabled="drawing" @click="startPicking">
+              {{ drawing ? '洗牌抽牌中…' : '开始抽牌' }}
+            </button>
+          </div>
+        </template>
       </template>
 
       <!-- 抽牌后：按牌阵摆牌（牌位标签取自 spread 返回的 position 字段） -->
@@ -277,6 +311,62 @@ const flipped = ref(false)   // 是否已翻开（驱动 3D 翻转动画）
 const drawing = ref(false)
 const drawError = ref('')
 
+/* ===== 自行选牌：78 张暗置牌背，前端洗牌后位置映射牌序号 ===== */
+const picking = ref(false)   // 选牌界面开关
+const deck = ref([])         // 洗牌后的 1-78 牌序号（展示顺序）
+const picked = ref([])       // 已选牌序号（按点选顺序 = 牌位顺序）
+
+// 各牌阵所需张数
+const needCount = computed(() => ({ single: 1, three: 3, choice: 3, love: 5, celtic: 10, hexagram: 7 }[spread.value] || 3))
+
+// Fisher-Yates 洗牌 1-78
+function shuffle78() {
+  const a = Array.from({ length: 78 }, (_, i) => i + 1)
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function startPicking() {
+  deck.value = shuffle78()
+  picked.value = []
+  picking.value = true
+  drawError.value = ''
+}
+
+function togglePick(no) {
+  const i = picked.value.indexOf(no)
+  if (i >= 0) picked.value.splice(i, 1)                    // 再次点击取消
+  else if (picked.value.length < needCount.value) picked.value.push(no)
+}
+
+// 选中次序（1 起），未选返回 0
+function pickOrder(no) {
+  const i = picked.value.indexOf(no)
+  return i >= 0 ? i + 1 : 0
+}
+
+function cancelPick() {
+  picking.value = false
+  picked.value = []
+}
+
+// 确认开牌：选中序号按牌位顺序以 cardNos 传给后端（后端未支持时等同随机，见 doDraw 回退）
+async function confirmPick() {
+  const nos = picked.value.join(',')
+  picking.value = false
+  await doDraw(nos)
+}
+
+// 随机为我抽：走原流程（不传 cardNos）
+async function randomDraw() {
+  picking.value = false
+  picked.value = []
+  await doDraw()
+}
+
 // 摆牌方式：single/three 横排；choice 二选一分翼；love 十字；celtic 凯尔特十字；hexagram 六芒星
 const layout = computed(() =>
   ({ choice: 'choice', love: 'love', celtic: 'celtic', hexagram: 'hexagram' }[spread.value] || 'row')
@@ -293,14 +383,22 @@ const backCount = computed(() => Math.min({ single: 1, three: 3, choice: 3, love
 function setSpread(s) {
   if (drawing.value) return
   spread.value = s
+  cancelPick()                        // 切换牌阵退出选牌
   if (drawn.value.length) resetDraw() // 切换牌阵重置为牌背待抽状态
 }
 
-async function doDraw() {
+async function doDraw(cardNos) {
   drawing.value = true
   drawError.value = ''
   try {
-    const result = await drawTarot(spread.value)
+    let result
+    try {
+      result = await drawTarot(spread.value, cardNos)
+    } catch (e) {
+      // 带 cardNos 请求失败（如后端暂未支持该参数）→ 回退老接口随机抽
+      if (!cardNos) throw e
+      result = await drawTarot(spread.value)
+    }
     drawn.value = result.cards || []
     // 等 DOM 渲染出背面后再触发翻转，形成逐张 stagger
     setTimeout(() => { flipped.value = true }, 80)
@@ -316,6 +414,7 @@ function resetDraw() {
   drawn.value = []
   flipped.value = false
   drawError.value = ''
+  cancelPick()
 }
 
 /* ===== 牌库（首次展开懒加载） ===== */
@@ -555,6 +654,96 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 .back-item:hover {
   transform: translateY(-8px); /* 悬停轻浮 */
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ===== 自行选牌：78 张暗置牌背网格 ===== */
+.pick-stage {
+  padding: 4px 0 10px;
+}
+.pick-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.pick-progress {
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+}
+.pick-hint {
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim2);
+}
+/* 桌面 13 列 × 6 行自适应网格，超高可滚动 */
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 6px 4px;
+}
+.pick-cell {
+  position: relative;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: transform 0.2s ease;
+}
+.pick-cell:hover:not(:disabled) {
+  transform: translateY(-3px); /* 微动效：悬停轻浮（reduced-motion 由全局样式关停） */
+}
+.pick-cell:disabled {
+  cursor: default;
+}
+/* 选中：金边亮起 + 光晕 + 上浮 */
+.pick-cell.chosen {
+  transform: translateY(-4px);
+}
+.pick-cell.chosen :deep(.card-back) {
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(232, 196, 124, 0.5);
+}
+/* 选中次序角标（1 起 = 牌位顺序） */
+.pick-order {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--gold);
+  color: #10163A;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(232, 196, 124, 0.6);
+  pointer-events: none;
+}
+.pick-actions {
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+/* 次级按钮：无金底，细描边 */
+.t-btn.ghost {
+  border-color: rgba(139, 135, 176, 0.35);
+  background: none;
+  color: var(--ink-dim);
+}
+.t-btn.ghost:hover:not(:disabled) {
+  border-color: var(--gold-dim);
+  color: var(--ink);
+  background: none;
+  box-shadow: none;
 }
 
 .stage-actions {
@@ -942,6 +1131,12 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   }
   .back-item {
     width: 84px;
+  }
+  /* 窄屏选牌网格：6 列自适应 */
+  .pick-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+    max-height: 420px;
   }
   .drawn-row {
     gap: 8px;

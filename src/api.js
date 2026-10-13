@@ -63,9 +63,12 @@ export function fetchTarotDaily() {
 }
 
 /** 抽牌仪式：spread = single（单牌指引）/ three（时间之流）/ choice（二选一）/ love（爱情十字）
- *  返回 {spread, spreadName, cards:[{card, orientation, position, keywords, meaning}]} */
-export function drawTarot(spread) {
-  return http.post('/tarot/draw', null, { params: { spread } })
+ *  返回 {spread, spreadName, cards:[{card, orientation, position, keywords, meaning}]}
+ *  cardNos：用户自行选牌的牌序号（逗号分隔，1-78，数量=牌阵张数，按牌位顺序）；
+ *  后端可选参数——未支持时忽略，等同随机抽牌（前端另有一层失败回退） */
+export function drawTarot(spread, cardNos) {
+  const params = cardNos ? { spread, cardNos } : { spread }
+  return http.post('/tarot/draw', null, { params })
 }
 
 /** 牌库：78 张塔罗牌全量（正逆位关键词与牌义） */

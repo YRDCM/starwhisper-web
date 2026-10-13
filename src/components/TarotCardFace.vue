@@ -127,6 +127,13 @@ const backDots = [
   transform: rotateZ(180deg); /* 逆位：牌名倒置 */
 }
 .face-top {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 44px; /* 文字避让：给右上角正/逆位角签留出固定空间，绝不重叠 */
   font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--ink-dim2);
@@ -198,15 +205,18 @@ const backDots = [
 .sz-lg .face-name { font-size: 26px; }
 .sz-lg .face-en { font-size: 16px; }
 .sz-lg .suit-seal { font-size: 20px; }
-.sz-lg .face-top { font-size: 12px; }
+.sz-lg .face-top { font-size: 12px; padding-right: 46px; }
 
 .sz-md .face-name { font-size: 18px; }
 .sz-md .face-en { font-size: 13px; }
 .sz-md .suit-seal { font-size: 15px; }
+/* md 卡面较窄：花色标识收字号字距（PENTACLES · 11 最长组合也能完整显示，不省略） */
+.sz-md .face-top { font-size: 9.5px; letter-spacing: 0.04em; padding-right: 42px; }
 
 .sz-sm .face-name { font-size: 13px; letter-spacing: 0.06em; }
 .sz-sm .face-en { display: none; } /* 空间紧张的小卡只显中文名（凯尔特十字/六芒星/牌库） */
 .sz-sm .suit-seal { font-size: 12px; }
-.sz-sm .face-top { font-size: 9px; letter-spacing: 0.08em; }
-.sz-sm .ori-tag { display: none; } /* 牌库小图不显示角签 */
+/* sm 卡不显角签（正逆位由牌面 180° 倒置 + 下方解读面板表达），花色标识保持居中、无需避让 */
+.sz-sm .face-top { font-size: 9px; letter-spacing: 0.08em; padding-right: 0; text-align: center; }
+.sz-sm .ori-tag { display: none; } /* 牌库小图/小阵卡不显示角签，避免与花色小字互挤 */
 </style>
