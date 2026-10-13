@@ -1,7 +1,7 @@
 <template>
   <!-- 塔罗牌面/牌背组件：7:12 牌比，细金边，星云紫底。
-       逆位时文字保持正向，仅中央符号区单独 rotateZ(180°) 表达倒牌（降亮度 + 朱砂淡描边），
-       角签固定右上角不旋转 -->
+       逆位 = 整张牌完全 rotateZ(180°)，与正位严格镜像：
+       牌名、花色标识、中央符号、「逆位」角签全部随牌倒转（角签镜像到左下方） -->
   <div class="tarot-card" :class="[`sz-${size}`, { down: faceDown }]">
     <!-- 牌背：同心细线圆 + 中心 ✦ + 星点（纯 SVG，无图片无 emoji） -->
     <div v-if="faceDown" class="card-back" aria-hidden="true">
@@ -26,11 +26,11 @@
         </div>
         <!-- 底部细线 -->
         <i class="face-bottom"></i>
+        <!-- 正/逆位角签：在旋转层之内，逆位时随牌倒转、镜像到左下方（与正位严格镜像） -->
+        <span v-if="orientation" class="ori-tag mono" :class="orientation">
+          {{ orientation === 'reversed' ? '逆位' : '正位' }}
+        </span>
       </div>
-      <!-- 正/逆位角签：位于旋转层之外，始终保持可读 -->
-      <span v-if="orientation" class="ori-tag mono" :class="orientation">
-        {{ orientation === 'reversed' ? '逆位' : '正位' }}
-      </span>
     </template>
   </div>
 </template>
@@ -125,16 +125,11 @@ const backDots = [
   text-align: center;
   transition: border-color 0.3s ease;
 }
-/* 逆位：牌面文字（牌名/花色标识）保持正向，仅中央符号区单独倒置表达倒牌；
-   整卡描边带一丝朱砂淡色作克制区分 */
+/* 逆位：整张牌完全倒转 180°，与正位严格镜像（牌名/花色/符号/角签全部随转，
+   角签镜像到左下方）；仅保留一丝朱砂淡描边作克制区分 */
 .face-inner.reversed {
-  border-color: rgba(194, 94, 94, 0.28);
-}
-/* 逆位中央符号：单独旋转 180° + 降亮度 + 朱砂淡描边 */
-.face-inner.reversed .suit-seal {
   transform: rotateZ(180deg);
-  filter: brightness(0.72);
-  border-color: rgba(194, 94, 94, 0.55);
+  border-color: rgba(194, 94, 94, 0.28);
 }
 .face-top {
   width: 100%;
@@ -165,7 +160,6 @@ const backDots = [
   font-family: var(--font-display);
   color: var(--gold);
   font-size: 14px;
-  transition: transform 0.4s ease, filter 0.3s ease, border-color 0.3s ease; /* 逆位倒置/降亮平滑过渡 */
 }
 .suit-seal.major {
   font-family: "Cormorant Garamond", "Noto Serif SC", serif;
