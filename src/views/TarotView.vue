@@ -31,25 +31,21 @@
             <span v-for="(k, i) in dailyKeywords" :key="i" class="kw-chip mono">{{ k }}</span>
           </div>
           <p class="meaning">{{ daily.meaning }}</p>
+          <div class="lesson-inline">
+            <button type="button" class="t-btn ghost" :aria-expanded="lessonOpen" @click="lessonOpen = !lessonOpen">{{ lessonOpen ? '收起知识' : '今日识牌 · 学习这张牌' }}</button>
+            <div v-if="lessonOpen" class="lesson-body">
+              <p class="m-label">正位 · {{ daily.card.uprightKeywords }}</p>
+              <p class="m-text">{{ daily.card.uprightMeaning }}</p>
+              <p class="m-label">逆位 · {{ daily.card.reversedKeywords }}</p>
+              <p class="m-text">{{ daily.card.reversedMeaning }}</p>
+              <p class="spread-hint">想一想：这张牌的哪个关键词，让你联想到最近的一件小事？</p>
+              <button type="button" class="t-btn" :disabled="todayLearned" @click="markLearned">{{ todayLearned ? '这张牌已学习 ✓' : '标记已学习' }}</button>
+            </div>
+            <p class="spread-hint" role="status">已学习 {{ learnedCards.length }} / 78 张 · 仅保存在当前浏览器</p>
+            <p v-if="studyError" class="error-line" role="alert">{{ studyError }}</p>
+          </div>
         </div>
       </template>
-    </section>
-
-    <section v-if="daily?.card" class="glass-card lesson">
-      <p class="eyebrow mono">DAILY STUDY · 今日识牌</p>
-      <h3 class="sec-title">认识 {{ daily.card.name }}</h3>
-      <p class="spread-hint">从今天的牌开始，先观察画面，再对照正逆位含义。</p>
-      <button type="button" class="t-btn ghost" :aria-expanded="lessonOpen" @click="lessonOpen = !lessonOpen">{{ lessonOpen ? '收起知识' : '学习这张牌' }}</button>
-      <div v-if="lessonOpen" class="lesson-body">
-        <p class="m-label">正位 · {{ daily.card.uprightKeywords }}</p>
-        <p class="m-text">{{ daily.card.uprightMeaning }}</p>
-        <p class="m-label">逆位 · {{ daily.card.reversedKeywords }}</p>
-        <p class="m-text">{{ daily.card.reversedMeaning }}</p>
-        <p class="spread-hint">想一想：这张牌的哪个关键词，让你联想到最近的一件小事？</p>
-        <button type="button" class="t-btn" :disabled="todayLearned" @click="markLearned">{{ todayLearned ? '这张牌已学习 ✓' : '标记已学习' }}</button>
-      </div>
-      <p class="spread-hint" role="status">已学习 {{ learnedCards.length }} / 78 张 · 仅保存在当前浏览器</p>
-      <p v-if="studyError" class="error-line" role="alert">{{ studyError }}</p>
     </section>
 
     <!-- ===== 抽牌仪式 ===== -->
@@ -75,6 +71,8 @@
       </div>
 
       <p class="spread-hint">{{ spreadHints[spread] }}</p>
+      <p v-if="drawn.length" class="spread-hint" role="status">{{ restoreNotice || '本次牌阵在当前设备保留 7 天，重新抽牌会清除。' }}</p>
+      <p v-if="snapshotError" class="error-line" role="status">{{ snapshotError }}</p>
       <p v-if="drawError" class="error-line" role="alert">{{ drawError }}</p>
 
       <!-- 抽牌前：选牌模式（78 张暗置牌背）或一排牌背入口 -->
@@ -143,7 +141,7 @@
         </div>
         <div v-if="drawn.length > 3 && compact" class="compact-cards">
           <TarotFlipCard v-for="(d, i) in drawn" :key="i" :item="d" :index="i" size="sm"
-            :flipped="i < revealedCount" :can-reveal="i === revealedCount" @reveal="revealNext" />
+            :flipped="i < revealedCount" :can-reveal="i === revealedCount" @reveal="revealNext" :selected="detailIndex === i && i < revealedCount" @select="selectDetail" />
         </div>
         <div v-else-if="layout === 'row'" class="drawn-row" :class="{ three: drawn.length === 3 }">
           <TarotFlipCard
@@ -153,12 +151,12 @@
             :item="d"
             :flipped="i < revealedCount" :can-reveal="i === revealedCount" @reveal="revealNext"
             :index="i"
-          />
+          :selected="detailIndex === i && i < revealedCount" @select="selectDetail" />
         </div>
 
         <!-- choice 二选一：现状居中略小居上，Y 形分叉线下接 选择A/B 两翼，暗示两条路径 -->
         <div v-else-if="layout === 'choice'" class="choice-layout">
-          <TarotFlipCard class="choice-center" :item="cardAt('现状')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" />
+          <TarotFlipCard class="choice-center" :item="cardAt('现状')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" :selected="detailIndex === 0 && 0 < revealedCount" @select="selectDetail" />
           <svg class="choice-fork" viewBox="0 0 470 60" aria-hidden="true">
             <line x1="235" y1="0" x2="235" y2="16" class="fork-line" />
             <line x1="235" y1="16" x2="75" y2="58" class="fork-line" />
@@ -166,49 +164,49 @@
             <circle cx="235" cy="16" r="2.5" class="fork-dot" />
           </svg>
           <div class="choice-wings">
-            <TarotFlipCard class="choice-wing" :item="cardAt('选择 A')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" />
-            <TarotFlipCard class="choice-wing" :item="cardAt('选择 B')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" />
+            <TarotFlipCard class="choice-wing" :item="cardAt('选择 A')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" :selected="detailIndex === 1 && 1 < revealedCount" @select="selectDetail" />
+            <TarotFlipCard class="choice-wing" :item="cardAt('选择 B')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" :selected="detailIndex === 2 && 2 < revealedCount" @select="selectDetail" />
           </div>
         </div>
 
         <!-- love 爱情十字：3×3 布点（上=现实阻碍 左=你的状态 中=关系现状 右=对方的状态 下=结果与建议） -->
         <div v-else-if="layout === 'love'" class="love-cross">
-          <TarotFlipCard class="c-top" :item="cardAt('现实阻碍')" :flipped="3 < revealedCount" :can-reveal="3 === revealedCount" @reveal="revealNext" :index="3" size="sm" />
-          <TarotFlipCard class="c-left" :item="cardAt('你的状态')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" />
-          <TarotFlipCard class="c-center" :item="cardAt('关系现状')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" />
-          <TarotFlipCard class="c-right" :item="cardAt('对方的状态')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" size="sm" />
-          <TarotFlipCard class="c-bottom" :item="cardAt('结果与建议')" :flipped="4 < revealedCount" :can-reveal="4 === revealedCount" @reveal="revealNext" :index="4" size="sm" />
+          <TarotFlipCard class="c-top" :item="cardAt('现实阻碍')" :flipped="3 < revealedCount" :can-reveal="3 === revealedCount" @reveal="revealNext" :index="3" size="sm" :selected="detailIndex === 3 && 3 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="c-left" :item="cardAt('你的状态')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" :selected="detailIndex === 0 && 0 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="c-center" :item="cardAt('关系现状')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" :selected="detailIndex === 2 && 2 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="c-right" :item="cardAt('对方的状态')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" size="sm" :selected="detailIndex === 1 && 1 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="c-bottom" :item="cardAt('结果与建议')" :flipped="4 < revealedCount" :can-reveal="4 === revealedCount" @reveal="revealNext" :index="4" size="sm" :selected="detailIndex === 4 && 4 < revealedCount" @select="selectDetail" />
         </div>
 
         <!-- celtic 凯尔特十字：左侧六牌十字（中央 现状核心 + 障碍挑战 横压 90°），右侧纵列牌杖 7→10 自下而上 -->
         <div v-else-if="layout === 'celtic'" class="celtic-wrap">
           <div class="celtic-cross">
             <div class="cx-center">
-              <TarotFlipCard :item="cardAt('现状核心')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" />
-              <TarotFlipCard class="cx-cross" :item="cardAt('障碍与挑战')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" size="sm" bare />
+              <TarotFlipCard :item="cardAt('现状核心')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" :selected="detailIndex === 0 && 0 < revealedCount" @select="selectDetail" />
+              <TarotFlipCard class="cx-cross" :item="cardAt('障碍与挑战')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" size="sm" bare :selected="detailIndex === 1 && 1 < revealedCount" @select="selectDetail" />
             </div>
-            <TarotFlipCard class="cx-bottom" :item="cardAt('潜意识根源')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" size="sm" />
-            <TarotFlipCard class="cx-left" :item="cardAt('过去的印记')" :flipped="3 < revealedCount" :can-reveal="3 === revealedCount" @reveal="revealNext" :index="3" size="sm" />
-            <TarotFlipCard class="cx-top" :item="cardAt('显意识目标')" :flipped="4 < revealedCount" :can-reveal="4 === revealedCount" @reveal="revealNext" :index="4" size="sm" />
-            <TarotFlipCard class="cx-right" :item="cardAt('未来的发展')" :flipped="5 < revealedCount" :can-reveal="5 === revealedCount" @reveal="revealNext" :index="5" size="sm" />
+            <TarotFlipCard class="cx-bottom" :item="cardAt('潜意识根源')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" size="sm" :selected="detailIndex === 2 && 2 < revealedCount" @select="selectDetail" />
+            <TarotFlipCard class="cx-left" :item="cardAt('过去的印记')" :flipped="3 < revealedCount" :can-reveal="3 === revealedCount" @reveal="revealNext" :index="3" size="sm" :selected="detailIndex === 3 && 3 < revealedCount" @select="selectDetail" />
+            <TarotFlipCard class="cx-top" :item="cardAt('显意识目标')" :flipped="4 < revealedCount" :can-reveal="4 === revealedCount" @reveal="revealNext" :index="4" size="sm" :selected="detailIndex === 4 && 4 < revealedCount" @select="selectDetail" />
+            <TarotFlipCard class="cx-right" :item="cardAt('未来的发展')" :flipped="5 < revealedCount" :can-reveal="5 === revealedCount" @reveal="revealNext" :index="5" size="sm" :selected="detailIndex === 5 && 5 < revealedCount" @select="selectDetail" />
           </div>
           <div class="celtic-staff">
-            <TarotFlipCard :item="cardAt('自我认知')" :flipped="6 < revealedCount" :can-reveal="6 === revealedCount" @reveal="revealNext" :index="6" size="sm" />
-            <TarotFlipCard :item="cardAt('环境与外力')" :flipped="7 < revealedCount" :can-reveal="7 === revealedCount" @reveal="revealNext" :index="7" size="sm" />
-            <TarotFlipCard :item="cardAt('希望与恐惧')" :flipped="8 < revealedCount" :can-reveal="8 === revealedCount" @reveal="revealNext" :index="8" size="sm" />
-            <TarotFlipCard :item="cardAt('最终结果')" :flipped="9 < revealedCount" :can-reveal="9 === revealedCount" @reveal="revealNext" :index="9" size="sm" />
+            <TarotFlipCard :item="cardAt('自我认知')" :flipped="6 < revealedCount" :can-reveal="6 === revealedCount" @reveal="revealNext" :index="6" size="sm" :selected="detailIndex === 6 && 6 < revealedCount" @select="selectDetail" />
+            <TarotFlipCard :item="cardAt('环境与外力')" :flipped="7 < revealedCount" :can-reveal="7 === revealedCount" @reveal="revealNext" :index="7" size="sm" :selected="detailIndex === 7 && 7 < revealedCount" @select="selectDetail" />
+            <TarotFlipCard :item="cardAt('希望与恐惧')" :flipped="8 < revealedCount" :can-reveal="8 === revealedCount" @reveal="revealNext" :index="8" size="sm" :selected="detailIndex === 8 && 8 < revealedCount" @select="selectDetail" />
+            <TarotFlipCard :item="cardAt('最终结果')" :flipped="9 < revealedCount" :can-reveal="9 === revealedCount" @reveal="revealNext" :index="9" size="sm" :selected="detailIndex === 9 && 9 < revealedCount" @select="selectDetail" />
           </div>
         </div>
 
         <!-- hexagram 六芒星：上下顶点 + 左右四角，结果居心（grid-area 跨两行） -->
         <div v-else-if="layout === 'hexagram'" class="hex-grid">
-          <TarotFlipCard class="hx-past" :item="cardAt('过去')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" />
-          <TarotFlipCard class="hx-present" :item="cardAt('现在')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" size="sm" />
-          <TarotFlipCard class="hx-future" :item="cardAt('未来')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" size="sm" />
-          <TarotFlipCard class="hx-block" :item="cardAt('阻碍')" :flipped="3 < revealedCount" :can-reveal="3 === revealedCount" @reveal="revealNext" :index="3" size="sm" />
-          <TarotFlipCard class="hx-help" :item="cardAt('助力')" :flipped="4 < revealedCount" :can-reveal="4 === revealedCount" @reveal="revealNext" :index="4" size="sm" />
-          <TarotFlipCard class="hx-advice" :item="cardAt('建议')" :flipped="5 < revealedCount" :can-reveal="5 === revealedCount" @reveal="revealNext" :index="5" size="sm" />
-          <TarotFlipCard class="hx-result" :item="cardAt('结果')" :flipped="6 < revealedCount" :can-reveal="6 === revealedCount" @reveal="revealNext" :index="6" />
+          <TarotFlipCard class="hx-past" :item="cardAt('过去')" :flipped="0 < revealedCount" :can-reveal="0 === revealedCount" @reveal="revealNext" :index="0" size="sm" :selected="detailIndex === 0 && 0 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="hx-present" :item="cardAt('现在')" :flipped="1 < revealedCount" :can-reveal="1 === revealedCount" @reveal="revealNext" :index="1" size="sm" :selected="detailIndex === 1 && 1 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="hx-future" :item="cardAt('未来')" :flipped="2 < revealedCount" :can-reveal="2 === revealedCount" @reveal="revealNext" :index="2" size="sm" :selected="detailIndex === 2 && 2 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="hx-block" :item="cardAt('阻碍')" :flipped="3 < revealedCount" :can-reveal="3 === revealedCount" @reveal="revealNext" :index="3" size="sm" :selected="detailIndex === 3 && 3 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="hx-help" :item="cardAt('助力')" :flipped="4 < revealedCount" :can-reveal="4 === revealedCount" @reveal="revealNext" :index="4" size="sm" :selected="detailIndex === 4 && 4 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="hx-advice" :item="cardAt('建议')" :flipped="5 < revealedCount" :can-reveal="5 === revealedCount" @reveal="revealNext" :index="5" size="sm" :selected="detailIndex === 5 && 5 < revealedCount" @select="selectDetail" />
+          <TarotFlipCard class="hx-result" :item="cardAt('结果')" :flipped="6 < revealedCount" :can-reveal="6 === revealedCount" @reveal="revealNext" :index="6" :selected="detailIndex === 6 && 6 < revealedCount" @select="selectDetail" />
         </div>
 
         <!-- 逐牌解读：关键词签 + 牌义段落 -->
@@ -236,10 +234,10 @@
 
         <div class="ai-reading">
           <p class="m-label">Kimi · AI 解牌 <span class="ai-badge">游客可用</span></p>
-          <p v-if="!drawId" class="spread-hint">AI 解牌暂未启用，基础牌义仍可正常阅读。</p>
+          <p v-if="!drawId && !aiResult" class="spread-hint">AI 解牌暂未启用，基础牌义仍可正常阅读。</p>
           <template v-else>
             <label for="tarot-question" class="spread-hint">你想梳理什么？（选填，最多 300 字）</label>
-            <textarea id="tarot-question" v-model="aiQuestion" maxlength="300" rows="2" :disabled="aiLoading || !!aiResult"
+            <textarea id="tarot-question" v-model="aiQuestion" maxlength="300" rows="2" @input="saveSnapshot" :disabled="aiLoading || !!aiResult"
               placeholder="例如：面对新的工作机会，我可以从哪些方面思考？" />
             <p class="ai-note">点击后会将问题与牌面发送给 Kimi，仅供娱乐与自我探索。每组牌生成一次，同一网络有每日限额。</p>
             <button v-if="!aiResult" type="button" class="t-btn" :disabled="aiLoading || !!nextCard" @click="readWithAi">
@@ -399,7 +397,7 @@ const compact = ref(true)
 const detailIndex = ref(0)
 const meaningOpen = ref(false)
 const detailCard = computed(() => detailIndex.value < revealedCount.value ? drawn.value[detailIndex.value] : null)
-function selectDetail(i) { if (i >= 0 && i < revealedCount.value) { detailIndex.value = i; meaningOpen.value = drawn.value.length === 1 } }
+function selectDetail(i) { if (Number.isInteger(i) && i >= 0 && i < revealedCount.value) { detailIndex.value = i; meaningOpen.value = drawn.value.length === 1; saveSnapshot() } }
 const drawId = ref('')
 const aiQuestion = ref('')
 const aiLoading = ref(false)
@@ -419,6 +417,7 @@ async function readWithAi() {
     if (disposed || id !== drawId.value) return
     if (!result?.summary || !result?.detail) throw new Error('未收到完整解读，请稍后重试')
     aiResult.value = result
+    saveSnapshot()
   } catch (e) {
     if (!disposed && id === drawId.value) aiError.value = e.message || '解读失败，请稍后重试'
   } finally {
@@ -428,7 +427,7 @@ async function readWithAi() {
 const drawing = ref(false)
 const drawError = ref('')
 let disposed = false
-onUnmounted(() => { disposed = true })
+onUnmounted(() => { saveSnapshot(); disposed = true })
 
 /* ===== 自行选牌：78 张暗置牌背，前端洗牌后位置映射牌序号 ===== */
 const picking = ref(false)   // 选牌界面开关
@@ -518,6 +517,9 @@ async function doDraw(cardNos) {
     if (!result?.cards?.length) throw new Error('未收到完整牌面，请重新尝试')
     drawn.value = result.cards
     drawId.value = result.drawId || ''
+    drawCreatedAt.value = Date.now()
+    restoreNotice.value = ''
+    saveSnapshot()
     cancelPick()
   } catch (e) {
     drawError.value = e.message || '无法连接星语服务器，请稍后再试'
@@ -528,12 +530,57 @@ async function doDraw(cardNos) {
 }
 
 function resetDraw() {
+  removeSnapshot()
+  restoreNotice.value = ''
   clearReading()
   drawn.value = []
   revealedCount.value = 0
   drawError.value = ''
   cancelPick()
 }
+
+
+const SNAPSHOT_KEY = 'starwhisper:tarot-session:v1'
+const drawCreatedAt = ref(0)
+const restoreNotice = ref('')
+const snapshotError = ref('')
+function removeSnapshot() {
+  try { localStorage.removeItem(SNAPSHOT_KEY); snapshotError.value = '' }
+  catch { snapshotError.value = '无法清除本地牌阵，请检查浏览器存储设置' }
+}
+function saveSnapshot() {
+  if (!drawn.value.length) return
+  try {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ version: 1, createdAt: drawCreatedAt.value,
+      spread: spread.value, cards: drawn.value, drawId: drawId.value, revealedCount: revealedCount.value,
+      detailIndex: detailIndex.value, question: aiQuestion.value, reading: aiResult.value }))
+    snapshotError.value = ''
+  } catch { snapshotError.value = '本次牌阵未能保存，离开后可能丢失；仍可继续阅读' }
+}
+function restoreSnapshot() {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY)
+    if (!raw) return
+    const s = JSON.parse(raw)
+    const count = { single: 1, three: 3, choice: 3, love: 5, celtic: 10, hexagram: 7 }[s?.spread]
+    if (s?.version !== 1 || !count || !Array.isArray(s.cards) || s.cards.length !== count ||
+        !s.cards.every(d => d?.card && typeof d.card.name === 'string' && ['upright','reversed'].includes(d.orientation)) ||
+        !Number.isFinite(s.createdAt) || s.createdAt > Date.now() || Date.now() - s.createdAt > 7 * 86400000 ||
+        !Number.isInteger(s.revealedCount) || s.revealedCount < 0 || s.revealedCount > count) {
+      removeSnapshot(); return
+    }
+    spread.value = s.spread; drawn.value = s.cards; drawCreatedAt.value = s.createdAt
+    revealedCount.value = s.revealedCount
+    detailIndex.value = Number.isInteger(s.detailIndex) && s.detailIndex >= 0 && s.detailIndex < s.revealedCount ? s.detailIndex : 0
+    aiQuestion.value = typeof s.question === 'string' ? s.question.slice(0, 300) : ''
+    aiResult.value = s.reading && typeof s.reading.summary === 'string' && typeof s.reading.detail === 'string' ? s.reading : null
+    const expired = Date.now() - s.createdAt >= 2 * 3600000
+    drawId.value = !expired && typeof s.drawId === 'string' ? s.drawId : ''
+    meaningOpen.value = count === 1
+    restoreNotice.value = expired ? '已恢复本地牌阵，仅供回看；如需新的 AI 解读，请重新抽牌。' : '已恢复上次牌阵与翻牌进度 · 仅保存在当前设备'
+  } catch { removeSnapshot(); snapshotError.value = '本地牌阵无法恢复，请重新抽牌' }
+}
+onMounted(restoreSnapshot)
 
 /* ===== 今日识牌：当前浏览器的学习记录 ===== */
 const STUDY_KEY = 'starwhisper:learned-tarot'
@@ -1458,4 +1505,6 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
   .ai-reading { padding: 16px; }
   .ai-reading .t-btn { width: 100%; padding-left: 8px; padding-right: 8px; font-size: 13px; }
 }
+.lesson-inline { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--gold-hairline); }
+.lesson-inline > .spread-hint { margin: 8px 0 0; font-size: 12px; }
 </style>

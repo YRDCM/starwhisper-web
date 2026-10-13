@@ -2,10 +2,11 @@
   <!-- 抽牌结果单卡：牌位标签 + 用户主动揭晓 -->
   <div class="flip-card">
     <p v-if="item.position && !bare" class="pos mono">{{ item.position }}</p>
-    <div class="flip" :class="{ flipped, 'can-reveal': canReveal }"
-      :role="canReveal ? 'button' : undefined" :tabindex="canReveal ? 0 : undefined"
-      :aria-label="canReveal ? `揭晓第 ${index + 1} 张：${item.position || '单牌指引'}` : undefined"
-      @click="canReveal && $emit('reveal')" @keydown.enter.prevent="canReveal && $emit('reveal')" @keydown.space.prevent="canReveal && $emit('reveal')">
+    <div class="flip" :class="{ flipped, 'can-reveal': canReveal, 'is-selected': selected, 'can-select': flipped }"
+      :role="(canReveal || flipped) ? 'button' : undefined" :tabindex="(canReveal || flipped) ? 0 : undefined"
+      :aria-label="canReveal ? `揭晓第 ${index + 1} 张：${item.position || '单牌指引'}` : flipped ? `查看第 ${index + 1} 张：${item.position || '指引'}` : undefined"
+      :aria-pressed="flipped ? selected : undefined"
+      @click="flipped ? $emit('select', index) : canReveal && $emit('reveal')" @keydown.enter.prevent="flipped ? $emit('select', index) : canReveal && $emit('reveal')" @keydown.space.prevent="flipped ? $emit('select', index) : canReveal && $emit('reveal')">
       <div class="flip-inner">
         <div class="flip-back" :aria-hidden="flipped"><TarotCardFace faceDown :size="size" /></div>
         <div class="flip-front" :aria-hidden="!flipped">
@@ -18,10 +19,11 @@
 
 <script setup>
 import TarotCardFace from './TarotCardFace.vue'
-defineEmits(['reveal'])
+defineEmits(['reveal', 'select'])
 
 defineProps({
   item: { type: Object, required: true },   // {card, orientation, position, keywords, meaning}
+  selected: { type: Boolean, default: false },
   flipped: { type: Boolean, default: false },
   canReveal: { type: Boolean, default: false },
   index: { type: Number, default: 0 },      // 牌位序号
@@ -31,6 +33,9 @@ defineProps({
 </script>
 
 <style scoped>
+.can-select { cursor: pointer; }
+.is-selected { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 10px; }
+.can-select:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; }
 .can-reveal { cursor: pointer; border-radius: 10px; outline: 1px solid var(--gold); outline-offset: 4px; }
 .can-reveal:focus-visible { outline-width: 3px; }
 .flip-card {
