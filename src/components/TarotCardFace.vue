@@ -1,6 +1,7 @@
 <template>
   <!-- 塔罗牌面/牌背组件：7:12 牌比，细金边，星云紫底。
-       逆位时仅牌面内部 rotateZ(180°)（牌名倒置，忠实塔罗），角签不随转 -->
+       逆位时文字保持正向，仅中央符号区单独 rotateZ(180°) 表达倒牌（降亮度 + 朱砂淡描边），
+       角签固定右上角不旋转 -->
   <div class="tarot-card" :class="[`sz-${size}`, { down: faceDown }]">
     <!-- 牌背：同心细线圆 + 中心 ✦ + 星点（纯 SVG，无图片无 emoji） -->
     <div v-if="faceDown" class="card-back" aria-hidden="true">
@@ -122,9 +123,18 @@ const backDots = [
   backdrop-filter: blur(6px);
   padding: 8% 6%;
   text-align: center;
+  transition: border-color 0.3s ease;
 }
+/* 逆位：牌面文字（牌名/花色标识）保持正向，仅中央符号区单独倒置表达倒牌；
+   整卡描边带一丝朱砂淡色作克制区分 */
 .face-inner.reversed {
-  transform: rotateZ(180deg); /* 逆位：牌名倒置 */
+  border-color: rgba(194, 94, 94, 0.28);
+}
+/* 逆位中央符号：单独旋转 180° + 降亮度 + 朱砂淡描边 */
+.face-inner.reversed .suit-seal {
+  transform: rotateZ(180deg);
+  filter: brightness(0.72);
+  border-color: rgba(194, 94, 94, 0.55);
 }
 .face-top {
   width: 100%;
@@ -155,6 +165,7 @@ const backDots = [
   font-family: var(--font-display);
   color: var(--gold);
   font-size: 14px;
+  transition: transform 0.4s ease, filter 0.3s ease, border-color 0.3s ease; /* 逆位倒置/降亮平滑过渡 */
 }
 .suit-seal.major {
   font-family: "Cormorant Garamond", "Noto Serif SC", serif;
