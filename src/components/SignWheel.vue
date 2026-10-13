@@ -4,15 +4,17 @@
        选中星座金色高亮底座，其余暗色；中心为选中星座三行读数（中文名/英文/日期）。
        移动端降级为网格（见样式媒体查询） -->
   <div class="wheel-wrap">
-    <div class="wheel">
+    <div class="wheel" role="group" aria-label="选择星座查看今日运势">
       <!-- 单圈发丝轨道：仅作结构衬线，极淡 -->
       <svg class="orbit" viewBox="0 0 640 640" aria-hidden="true">
         <circle cx="320" cy="320" r="250" class="orbit-ring" />
       </svg>
 
       <!-- 中心读数：静态三行（中文名 / 英文 / 日期区间） -->
-      <div class="wheel-center">
+      <div class="wheel-center" aria-live="polite" aria-atomic="true">
         <template v-if="current">
+          <span class="center-label mono">当前星座</span>
+          <Constellation :sign="current.nameEn" class="center-const" />
           <span class="center-name">{{ current.name }}</span>
           <span class="center-en">{{ current.nameEn }}</span>
           <span class="center-dates mono">{{ current.dateRange }}</span>
@@ -29,15 +31,18 @@
         :class="{ active: sign.id === modelValue }"
         :style="nodeStyle(i)"
         :title="`${sign.name} ${sign.dateRange || ''}`"
-        @click="$emit('update:modelValue', sign.id); $emit('change', sign)"
+        :aria-pressed="sign.id === modelValue"
+        @click="selectSign(sign)"
       >
         <span class="node-inner">
+          <span v-if="sign.id === modelValue" class="selected-mark" aria-hidden="true">✓</span>
           <Constellation :sign="sign.nameEn" class="node-const" />
           <span class="sign-name">{{ sign.name }}</span>
           <span class="sign-dates mono">{{ sign.dateRange }}</span>
         </span>
       </button>
     </div>
+    <p class="wheel-hint">点击星座，查看今日运势</p>
   </div>
 </template>
 
@@ -49,7 +54,12 @@ const props = defineProps({
   signs: { type: Array, default: () => [] },  // 12 星座列表
   modelValue: { type: Number, default: null } // 当前选中星座 id（v-model）
 })
-defineEmits(['update:modelValue', 'change'])
+const emit = defineEmits(['update:modelValue', 'change'])
+function selectSign(sign) {
+  if (sign.id === props.modelValue) return
+  emit('update:modelValue', sign.id)
+  emit('change', sign)
+}
 
 // 当前选中的星座对象（用于中心读数）
 const current = computed(() => props.signs.find((s) => s.id === props.modelValue))
@@ -70,11 +80,13 @@ function nodeStyle(i) {
 .wheel-wrap {
   --wheel-radius: 250px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 24px 0 12px;
 }
 
 .wheel {
+  flex: none;
   position: relative;
   width: 640px;
   height: 640px;
@@ -90,7 +102,7 @@ function nodeStyle(i) {
 }
 .orbit-ring {
   fill: none;
-  stroke: rgba(232, 201, 122, 0.12);
+  stroke: rgba(232, 201, 122, 0.19);
   stroke-width: 1;
 }
 
@@ -108,6 +120,9 @@ function nodeStyle(i) {
   align-items: center;
   gap: 10px;
 }
+.center-label { color: var(--ink-dim2); font-size: 12px; letter-spacing: 0.18em; }
+.center-const { width: 64px; height: 64px; margin: 2px 0 4px; }
+.wheel-hint { margin: 4px 0 12px; color: var(--ink-dim2); font-size: 13px; letter-spacing: 0.08em; text-align: center; }
 .center-name {
   font-family: var(--font-display);
   font-size: 46px;
@@ -121,17 +136,19 @@ function nodeStyle(i) {
   font-style: italic;
   font-weight: 500;
   font-size: 17px;
-  color: var(--ink-dim);
+  color: var(--ink-dim2);
 }
 .center-dates {
-  font-size: 12.5px;
-  letter-spacing: 0.24em;
-  text-indent: 0.24em;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
   color: var(--ink-dim2);
 }
 
 /* 星座节点：108px 圆形底座（暗色星云紫 + 细描边），符号/名字/日期全部显示 */
 .sign-node {
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
   position: absolute;
   top: 50%;
   left: 50%;
@@ -145,6 +162,7 @@ function nodeStyle(i) {
   color: var(--ink);
 }
 .node-inner {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -153,10 +171,10 @@ function nodeStyle(i) {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 1px solid rgba(139, 135, 176, 0.22);
+  border: 1px solid rgba(139, 135, 176, 0.32);
   background: rgba(35, 32, 72, 0.5);
   backdrop-filter: blur(6px);
-  transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s, transform 0.15s;
 }
 .sign-node:hover .node-inner {
   border-color: var(--gold-dim);
@@ -166,22 +184,27 @@ function nodeStyle(i) {
 .sign-node.active .node-inner {
   border-color: var(--gold);
   background: rgba(232, 196, 124, 0.1);
-  box-shadow: 0 0 20px rgba(232, 196, 124, 0.4), inset 0 0 12px rgba(232, 196, 124, 0.14);
+  box-shadow: 0 0 18px rgba(232, 196, 124, 0.22), inset 0 0 12px rgba(232, 196, 124, 0.08);
 }
+.sign-node:focus-visible { outline: 2px solid var(--gold); outline-offset: 5px; }
+.sign-node:active .node-inner { transform: scale(0.97); }
+.selected-mark { position: absolute; right: 5px; top: 5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--gold); color: var(--bg); font-size: 12px; line-height: 1; }
 
 .node-const {
   width: 36px;
   height: 36px;
+  opacity: 0.75;
 }
+.sign-node.active .node-const, .sign-node:focus-visible .node-const, .sign-node:hover .node-const { opacity: 1; }
 .sign-name {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 0.12em;
   color: var(--ink);
   line-height: 1.2;
 }
 .sign-dates {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.02em;
   color: var(--ink-dim2);
   white-space: nowrap;
@@ -191,7 +214,7 @@ function nodeStyle(i) {
 }
 
 /* ===== 移动端降级：圆环放不下，改为网格（不旋转） ===== */
-@media (max-width: 680px) {
+@media (max-width: 700px) {
   .wheel {
     width: 100%;
     height: auto;
@@ -212,6 +235,7 @@ function nodeStyle(i) {
     width: auto;
     height: auto;
     min-width: 0; /* 允许网格项收缩，配合 minmax(0,1fr) */
+    border-radius: 6px;
     transform: none !important; /* 覆盖内联圆环 transform，否则节点散落成圆 */
   }
   .node-inner {
@@ -228,5 +252,8 @@ function nodeStyle(i) {
   .sign-dates {
     white-space: nowrap;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node-inner { transition: none; }
 }
 </style>

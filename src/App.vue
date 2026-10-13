@@ -88,8 +88,8 @@
             <span class="mini-spinner"></span>星辰换算中…
           </div>
           <section class="top-row">
-            <FortuneCard :fortune="fortune" :sign="currentSign" class="fortune-col" />
-            <RadarChart :fortune="fortune" :sign="currentSign" class="radar-col" />
+            <FortuneCard :fortune="fortune" :sign="displayedSign" class="fortune-col" />
+            <RadarChart :fortune="fortune" :sign="displayedSign" class="radar-col" />
           </section>
           <TrendChart :week="week" />
         </main>
@@ -165,8 +165,11 @@ const fortune = ref(null)       // 今日运势
 const week = ref([])            // 近 7 天运势
 const loading = ref(false)
 const error = ref('')
+let fortuneRequestId = 0
 
 const currentSign = computed(() => signs.value.find((s) => s.id === currentSignId.value) || null)
+// 切换时保留的旧运势，仍使用其所属星座资料，避免加载期间日期与名称错配。
+const displayedSign = computed(() => signs.value.find((s) => s.nameEn === fortune.value?.signNameEn) || currentSign.value)
 
 // 今日日期展示：等宽格式 2026-09-24 · 星期四
 const todayText = computed(() => {
@@ -200,6 +203,7 @@ function findTodaySign(list) {
 
 // 并行拉取今日运势 + 近 7 天运势
 async function loadFortune(sign) {
+  const requestId = ++fortuneRequestId
   loading.value = true
   error.value = ''
   try {
@@ -207,14 +211,16 @@ async function loadFortune(sign) {
       fetchTodayFortune(sign.nameEn),
       fetchWeekFortune(sign.nameEn)
     ])
+    if (requestId !== fortuneRequestId) return
     fortune.value = today
     week.value = weekData
   } catch (e) {
+    if (requestId !== fortuneRequestId) return
     error.value = '无法连接星语服务器，请稍后再试'
     fortune.value = null
     week.value = []
   } finally {
-    loading.value = false
+    if (requestId === fortuneRequestId) loading.value = false
   }
 }
 
