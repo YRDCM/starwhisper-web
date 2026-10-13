@@ -130,6 +130,12 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* 键盘导航沿用现有金色主题，避免焦点落在牌背上时无法辨认。 */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+}
+
 /* 减少动态偏好：关掉旋转/闪烁/描绘动画 */
 @media (prefers-reduced-motion: reduce) {
   .spinner, .mini-spinner {

@@ -55,10 +55,11 @@
       </div>
 
       <p v-if="error" class="error-line">{{ error }}</p>
+      <p v-if="resultStale" class="selection-hint" role="status">选择已更新，点击重新配对查看新结果。下方为上次结果。</p>
 
       <div class="picker-actions">
         <button type="button" class="match-btn" :disabled="loading" @click="doMatch">
-          {{ loading ? '星辰推演中…' : '开始配对' }}
+          {{ loading ? '星辰推演中…' : resultStale ? '重新配对' : '开始配对' }}
         </button>
       </div>
     </section>
@@ -156,6 +157,9 @@ const gender2 = ref(0) // 默认女
 const result = ref(null)
 const loading = ref(false)
 const error = ref('')
+const resultKey = ref('')
+const selectionKey = computed(() => JSON.stringify([star1.value, star2.value, gender1.value, gender2.value]))
+const resultStale = computed(() => !!result.value && resultKey.value !== selectionKey.value)
 
 // 入场动画开关：结果渲染后下一帧再推到目标值，触发金环/金条过渡
 const ready = ref(false)
@@ -206,13 +210,15 @@ function findTodaySign(list) {
 
 /* ===== 发起配对 ===== */
 async function doMatch() {
-  if (!star1.value || !star2.value) return
+  if (loading.value || !star1.value || !star2.value) return
+  const requestedKey = selectionKey.value
   loading.value = true
   error.value = ''
   try {
     const data = await fetchMatch(star1.value, star2.value, gender1.value, gender2.value)
     ready.value = false
     result.value = data
+    resultKey.value = requestedKey
     shownOverall.value = data.scores.overall ?? 0
     // 下一帧推开动画终态
     await nextTick()
@@ -250,6 +256,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 22px;
 }
+.selection-hint { color: var(--gold); font-size: 14px; line-height: 1.7; margin-top: 16px; }
 
 /* ===== 选择器 ===== */
 .picker {

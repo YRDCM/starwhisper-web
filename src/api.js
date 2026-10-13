@@ -39,7 +39,21 @@ http.interceptors.response.use(
     }
     return Promise.reject(err)
   },
-  (err) => Promise.reject(err)
+  (err) => {
+    const status = err.response?.status
+    if (status === 401) {
+      setToken('')
+      err.code = 401
+      err.message = '登录已失效，请重新登录'
+    } else if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+      err.message = '请求超时，请稍后重试'
+    } else if (!err.response) {
+      err.message = '无法连接星语服务器，请检查网络后重试'
+    } else {
+      err.message = err.response.data?.message || `星语服务器响应异常（HTTP ${status}）`
+    }
+    return Promise.reject(err)
+  }
 )
 
 /** 获取 12 星座列表（按 id 排序：白羊..双鱼） */
@@ -65,7 +79,7 @@ export function fetchTarotDaily() {
 /** 抽牌仪式：spread = single（单牌指引）/ three（时间之流）/ choice（二选一）/ love（爱情十字）
  *  返回 {spread, spreadName, cards:[{card, orientation, position, keywords, meaning}]}
  *  cardNos：用户自行选牌的牌序号（逗号分隔，1-78，数量=牌阵张数，按牌位顺序）；
- *  后端可选参数——未支持时忽略，等同随机抽牌（前端另有一层失败回退） */
+ *  自选失败保留错误，不自动改为随机抽牌。 */
 export function drawTarot(spread, cardNos) {
   const params = cardNos ? { spread, cardNos } : { spread }
   return http.post('/tarot/draw', null, { params })

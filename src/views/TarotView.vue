@@ -57,23 +57,26 @@
         </div>
       </div>
 
-      <p v-if="drawError" class="error-line">{{ drawError }}</p>
+      <p class="spread-hint">{{ spreadHints[spread] }}</p>
+      <p v-if="drawError" class="error-line" role="alert">{{ drawError }}</p>
 
       <!-- 抽牌前：选牌模式（78 张暗置牌背）或一排牌背入口 -->
       <template v-if="!drawn.length">
         <!-- 自行选牌：78 张暗置牌背网格，点选金边亮起、可取消，选满后确认开牌 -->
         <div v-if="picking" class="pick-stage">
           <div class="pick-head">
-            <span class="pick-progress mono">已选 {{ picked.length }}/{{ needCount }}</span>
+            <span class="pick-progress mono" role="status">已选 {{ picked.length }}/{{ needCount }} · {{ picked.length === needCount ? '已选满，可以确认开牌' : `还需选 ${needCount - picked.length} 张` }}</span>
             <span class="pick-hint">凭直觉点选 {{ needCount }} 张牌背，再次点击可取消</span>
           </div>
           <div class="pick-grid">
             <button
-              v-for="no in deck"
+              v-for="(no, index) in deck"
               :key="no"
               type="button"
               class="pick-cell"
               :class="{ chosen: picked.includes(no) }"
+              :aria-label="`第 ${index + 1} 张牌背`"
+              :aria-pressed="picked.includes(no)"
               :disabled="drawing"
               @click="togglePick(no)"
             >
@@ -274,7 +277,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import TarotCardFace from '../components/TarotCardFace.vue'
 import TarotFlipCard from '../components/TarotFlipCard.vue'
 import { fetchTarotDaily, drawTarot, fetchTarotCards } from '../api'
@@ -284,7 +287,8 @@ const daily = ref(null)
 const dailyLoading = ref(false)
 const dailyError = ref('')
 
-const todayStr = new Date().toISOString().slice(0, 10)
+const today = new Date()
+const todayStr = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-')
 const dailyKeywords = computed(() => splitKw(daily.value ? daily.value.keywords : ''))
 
 async function loadDaily() {
@@ -319,10 +323,21 @@ const SPREAD_GROUPS = [
   }
 ]
 const spread = ref('single') // 当前牌阵
+const spreadHints = {
+  single: '单牌指引 · 整理当下思绪，获得一个思考方向。',
+  three: '时间之流 · 从过去、现在与未来三个角度梳理问题。',
+  choice: '二选一 · 比较两个方向，探索各自的可能性。',
+  love: '爱情十字 · 从双方状态、关系与阻碍理解相处。',
+  celtic: '凯尔特十字 · 从十个角度深入梳理复杂问题。',
+  hexagram: '六芒星 · 综合回顾经历、阻碍与可借助的力量。'
+}
 const drawn = ref([])        // 抽到的牌（带 position 牌位）
 const flipped = ref(false)   // 是否已翻开（驱动 3D 翻转动画）
 const drawing = ref(false)
 const drawError = ref('')
+let flipTimer
+let disposed = false
+onUnmounted(() => { disposed = true; clearTimeout(flipTimer) })
 
 /* ===== 自行选牌：78 张暗置牌背，前端洗牌后位置映射牌序号 ===== */
 const picking = ref(false)   // 选牌界面开关
@@ -366,10 +381,10 @@ function cancelPick() {
   picked.value = []
 }
 
-// 确认开牌：选中序号按牌位顺序以 cardNos 传给后端（后端未支持时等同随机，见 doDraw 回退）
+// 确认开牌：失败时保留已选牌，方便原样重试。
 async function confirmPick() {
+  if (drawing.value || picked.value.length !== needCount.value) return
   const nos = picked.value.join(',')
-  picking.value = false
   await doDraw(nos)
 }
 
@@ -401,22 +416,20 @@ function setSpread(s) {
 }
 
 async function doDraw(cardNos) {
+  if (drawing.value) return
+  clearTimeout(flipTimer)
+  flipped.value = false
   drawing.value = true
   drawError.value = ''
   try {
-    let result
-    try {
-      result = await drawTarot(spread.value, cardNos)
-    } catch (e) {
-      // 带 cardNos 请求失败（如后端暂未支持该参数）→ 回退老接口随机抽
-      if (!cardNos) throw e
-      result = await drawTarot(spread.value)
-    }
+    const result = await drawTarot(spread.value, cardNos)
+    if (disposed) return
     drawn.value = result.cards || []
+    cancelPick()
     // 等 DOM 渲染出背面后再触发翻转，形成逐张 stagger
-    setTimeout(() => { flipped.value = true }, 80)
+    flipTimer = setTimeout(() => { flipped.value = true }, 80)
   } catch (e) {
-    drawError.value = '无法连接星语服务器，请稍后再试'
+    drawError.value = e.message || '无法连接星语服务器，请稍后再试'
     drawn.value = []
   } finally {
     drawing.value = false
@@ -424,6 +437,7 @@ async function doDraw(cardNos) {
 }
 
 function resetDraw() {
+  clearTimeout(flipTimer)
   drawn.value = []
   flipped.value = false
   drawError.value = ''
@@ -449,11 +463,11 @@ function openCard(c) {
 }
 
 // no 字段后端已输出；缺失时按 arcanaGroup + cardNumber 换算（愚人=1 … 世界=22，权杖 23-36，圣杯 37-50，宝剑 51-64，星币 65-78）
-const GROUP_BASE = { MAJOR: 0, WANDS: 22, CUPS: 36, SWORDS: 50, PENTACLES: 64 }
+const GROUP_BASE = { MAJOR: 1, WANDS: 22, CUPS: 36, SWORDS: 50, PENTACLES: 64 }
 const cardImgSrc = computed(() => {
   const c = activeCard.value
   if (!c) return ''
-  const no = c.no || (GROUP_BASE[c.arcanaGroup] ?? 0) + (c.cardNumber ?? 0) + 1
+  const no = c.no || (GROUP_BASE[c.arcanaGroup] ?? 0) + (c.cardNumber ?? 0)
   return `/tarot/tarot-${no}.webp`
 })
 
@@ -497,6 +511,7 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 </script>
 
 <style scoped>
+.spread-hint { color: var(--ink-dim); font-size: 14px; line-height: 1.7; margin: 12px 0; }
 .tarot-view {
   display: flex;
   flex-direction: column;
