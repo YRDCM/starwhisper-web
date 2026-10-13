@@ -12,6 +12,11 @@ export default defineConfig({
       '/api': {
         target: apiTarget,
         changeOrigin: true
+      },
+      // 塔罗牌图与后端同源部署（/tarot/tarot-{no}.webp），开发环境一并代理
+      '/tarot': {
+        target: apiTarget,
+        changeOrigin: true
       }
     }
   }

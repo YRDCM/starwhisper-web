@@ -218,7 +218,7 @@
                 type="button"
                 class="grid-card"
                 :title="`${c.name} ${c.nameEn}`"
-                @click="activeCard = c"
+                @click="openCard(c)"
               >
                 <TarotCardFace :card="c" size="sm" />
               </button>
@@ -232,8 +232,21 @@
     <div v-if="activeCard" class="modal-mask" @click.self="activeCard = null">
       <div class="modal glass-card" role="dialog" :aria-label="activeCard.name">
         <button type="button" class="modal-close mono" @click="activeCard = null">✕</button>
-        <div class="modal-face">
-          <TarotCardFace :card="activeCard" size="md" />
+        <div class="modal-face" :class="{ 'has-img': !cardImgFailed }">
+          <!-- 有 RWS 牌图：aspectFit + 淡金描边 + 微暗融入夜色；逆位整图倒置（与牌阵镜像一致）；加载失败回退纯样式牌面 -->
+          <img
+            v-if="!cardImgFailed"
+            class="m-card-img"
+            :class="{ reversed: modalOri === 'reversed' }"
+            :src="cardImgSrc"
+            :alt="activeCard.name"
+            @error="cardImgFailed = true"
+          />
+          <TarotCardFace v-else :card="activeCard" :orientation="modalOri" size="md" />
+          <div class="ori-switch mono" role="group" aria-label="牌向预览">
+            <button type="button" :class="{ on: modalOri === 'upright' }" @click="modalOri = 'upright'">正位</button>
+            <button type="button" :class="{ on: modalOri === 'reversed' }" @click="modalOri = 'reversed'">逆位</button>
+          </div>
         </div>
         <div class="modal-info">
           <h4 class="m-title">
@@ -423,6 +436,26 @@ const cards = ref([])
 const cardsLoading = ref(false)
 const cardsError = ref('')
 const activeCard = ref(null)
+
+/* ===== 详情弹层牌图：/tarot/tarot-{no}.webp；加载失败回退纯样式牌面 ===== */
+const cardImgFailed = ref(false)
+const modalOri = ref('upright') // 弹层牌向预览（正/逆切换，仅影响牌面展示，右侧牌义两块常驻）
+
+// 打开弹层时复位牌图与牌向
+function openCard(c) {
+  activeCard.value = c
+  cardImgFailed.value = false
+  modalOri.value = 'upright'
+}
+
+// no 字段后端已输出；缺失时按 arcanaGroup + cardNumber 换算（愚人=1 … 世界=22，权杖 23-36，圣杯 37-50，宝剑 51-64，星币 65-78）
+const GROUP_BASE = { MAJOR: 0, WANDS: 22, CUPS: 36, SWORDS: 50, PENTACLES: 64 }
+const cardImgSrc = computed(() => {
+  const c = activeCard.value
+  if (!c) return ''
+  const no = c.no || (GROUP_BASE[c.arcanaGroup] ?? 0) + (c.cardNumber ?? 0) + 1
+  return `/tarot/tarot-${no}.webp`
+})
 
 const GROUP_META = [
   { key: 'MAJOR', zh: '大阿尔卡纳' },
@@ -1044,6 +1077,48 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 .modal-face {
   flex: none;
   width: 140px;
+}
+/* 有牌图时加宽，与 292px 高保持 RWS 牌比(约 1:1.7) */
+.modal-face.has-img {
+  width: 172px;
+}
+.m-card-img {
+  display: block;
+  width: 100%;
+  height: 292px;
+  object-fit: contain; /* aspectFit：整牌入框不裁切 */
+  border-radius: 8px;
+  border: 1px solid rgba(232, 196, 124, 0.4); /* 淡金描边 */
+  box-sizing: border-box;
+  background: rgba(10, 14, 34, 0.55); /* contain 留白处融入夜色 */
+  filter: brightness(0.92); /* 微暗 */
+  transition: transform 0.3s ease;
+}
+.m-card-img.reversed {
+  transform: rotate(180deg); /* 逆位：牌图整幅倒置 */
+}
+.ori-switch {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  justify-content: center;
+}
+.ori-switch button {
+  background: none;
+  border: 1px solid rgba(232, 196, 124, 0.28);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.ori-switch button:hover { color: var(--gold); }
+.ori-switch button.on {
+  color: var(--gold);
+  border-color: rgba(232, 196, 124, 0.6);
+  background: rgba(232, 196, 124, 0.08);
 }
 .modal-info {
   flex: 1;
