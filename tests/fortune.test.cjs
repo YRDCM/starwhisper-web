@@ -13,7 +13,9 @@ function setup() {
     ref, computed, onMounted: () => {}, location: { hash: '' },
     window: { addEventListener: () => {} }, localStorage: { getItem: () => null },
     fetchTodayFortune: (sign) => new Promise((resolve, reject) => { pending[sign] = { resolve, reject } }),
-    fetchWeekFortune: async (sign) => [sign]
+    fetchWeekFortune: async (sign) => [sign],
+    // 周运默认直接成功（周运用例见 weekly.test.cjs）
+    fetchWeeklyFortune: async (sign) => ({ signNameEn: sign, source: 'SHOWAPI' })
   }
   vm.runInNewContext(source + '\nthis.page = { loadFortune, fortune, week, loading, error, signs, currentSignId, displayedSign };', context)
   return { page: context.page, pending }

@@ -71,6 +71,11 @@ export function fetchWeekFortune(sign) {
   return http.get('/fortune/week', { params: { sign } })
 }
 
+/** 获取某星座本周运势（ShowAPI week 节点；无本地兜底，失败会 reject，前端显示错误态） */
+export function fetchWeeklyFortune(sign) {
+  return http.get('/fortune/weekly', { params: { sign } })
+}
+
 /** 每日塔罗（不传 sign，按日确定性出一张） */
 export function fetchTarotDaily() {
   return http.get('/tarot/daily')

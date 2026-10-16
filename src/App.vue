@@ -74,6 +74,40 @@
         <!-- 星座星盘：加载完成即渲染，无需任何交互 -->
         <SignWheel v-model="currentSignId" :signs="signs" @change="onSignChange" />
 
+        <!-- 今日/本周切换：与顶部视图切换同款的等宽小 caps 标签 -->
+        <nav class="scope-tabs" aria-label="运势范围切换">
+          <button
+            type="button"
+            class="scope-tab mono"
+            :class="{ active: mode === 'today' }"
+            @click="setMode('today')"
+          >今日 <span class="tab-en">TODAY</span></button>
+          <button
+            type="button"
+            class="scope-tab mono"
+            :class="{ active: mode === 'week' }"
+            @click="setMode('week')"
+          >本周 <span class="tab-en">WEEK</span></button>
+        </nav>
+
+        <!-- ===== 本周视图：独立数据流，失败显示专属错误态（周运无本地兜底） ===== -->
+        <div v-if="mode === 'week'">
+          <div v-if="weeklyLoading && !weekly" class="glass-card state-card">
+            <div class="spinner"></div>
+            <p class="state-text">正在聆听本周星象…</p>
+          </div>
+          <div v-else-if="weeklyError" class="glass-card state-card">
+            <p class="state-emoji">✧</p>
+            <p class="state-text">{{ weeklyError }}</p>
+            <button class="retry-btn" @click="retryWeekly">重试</button>
+          </div>
+          <main v-else-if="weekly" class="content" :class="{ refreshing: weeklyLoading }">
+            <WeeklyCard :weekly="weekly" :sign="displayedWeeklySign" />
+          </main>
+        </div>
+
+        <!-- ===== 今日视图 ===== -->
+        <div v-show="mode === 'today'">
         <!-- 首次加载（还没拿到任何数据）才显示整页加载态 -->
         <div v-if="loading && !fortune" class="glass-card state-card">
           <div class="spinner"></div>
@@ -93,6 +127,7 @@
           </section>
           <TrendChart :week="week" />
         </main>
+        </div>
       </template>
     </div>
 
@@ -122,6 +157,7 @@ import { APP_VERSION } from './config'
 import StarField from './components/StarField.vue'
 import SignWheel from './components/SignWheel.vue'
 import FortuneCard from './components/FortuneCard.vue'
+import WeeklyCard from './components/WeeklyCard.vue'
 import RadarChart from './components/RadarChart.vue'
 import TrendChart from './components/TrendChart.vue'
 import TarotView from './views/TarotView.vue'
@@ -131,7 +167,7 @@ import MatchView from './views/MatchView.vue'
 import MineView from './views/MineView.vue'
 import AdminView from './views/AdminView.vue'
 import CheckinButton from './components/CheckinButton.vue'
-import { fetchSigns, fetchTodayFortune, fetchWeekFortune } from './api'
+import { fetchSigns, fetchTodayFortune, fetchWeekFortune, fetchWeeklyFortune } from './api'
 
 /* ===== 后台管理页：URL #admin / #/admin 直达（不进主导航），监听 hash 变化可来回切换 ===== */
 const isAdmin = ref(/^#\/?admin$/.test(location.hash))
@@ -166,6 +202,57 @@ const week = ref([])            // 近 7 天运势
 const loading = ref(false)
 const error = ref('')
 let fortuneRequestId = 0
+
+/* ===== 今日/本周切换：周运是独立数据流（无本地兜底，失败走专属错误态） ===== */
+const mode = ref('today')       // 星运视图内：today / week
+const weekly = ref(null)        // 本周运势（WeeklyFortuneVO）
+const weeklyLoading = ref(false)
+const weeklyError = ref('')
+const weeklyCache = {}          // 非响应式：同星座一周数据不变，来回切换不重复请求
+let weeklyRequestId = 0
+
+// 切换时保留的旧周运，仍使用其所属星座资料（与 displayedSign 同理）
+const displayedWeeklySign = computed(() =>
+  signs.value.find((s) => s.nameEn === weekly.value?.signNameEn) || currentSign.value
+)
+
+function setMode(m) {
+  if (m === mode.value) return
+  mode.value = m
+  // 切到本周且还没数据才加载（有缓存直接用，见 loadWeekly）
+  if (m === 'week' && !weekly.value && !weeklyLoading.value && currentSign.value) {
+    loadWeekly(currentSign.value)
+  }
+}
+
+async function loadWeekly(sign, force) {
+  if (!sign) return
+  if (!force && weeklyCache[sign.nameEn]) {
+    weekly.value = weeklyCache[sign.nameEn]
+    weeklyError.value = ''
+    return
+  }
+  const requestId = ++weeklyRequestId
+  weeklyLoading.value = true
+  weeklyError.value = ''
+  try {
+    const data = await fetchWeeklyFortune(sign.nameEn)
+    if (requestId !== weeklyRequestId) return
+    weeklyCache[sign.nameEn] = data
+    weekly.value = data
+  } catch (e) {
+    if (requestId !== weeklyRequestId) return
+    // 数据诚实：失败就显示错误态，绝不拿旧数据冒充
+    weekly.value = null
+    weeklyError.value = '本周运势暂时连接不上，请稍后重试'
+  } finally {
+    if (requestId === weeklyRequestId) weeklyLoading.value = false
+  }
+}
+
+function retryWeekly() {
+  if (currentSign.value) loadWeekly(currentSign.value, true)
+}
 
 const currentSign = computed(() => signs.value.find((s) => s.id === currentSignId.value) || null)
 // 切换时保留的旧运势，仍使用其所属星座资料，避免加载期间日期与名称错配。
@@ -206,6 +293,8 @@ async function loadFortune(sign) {
   const requestId = ++fortuneRequestId
   loading.value = true
   error.value = ''
+  // 切换星座时本周数据也要刷新（独立数据流，失败不影响今日）
+  loadWeekly(sign)
   try {
     const [today, weekData] = await Promise.all([
       fetchTodayFortune(sign.nameEn),
@@ -330,6 +419,32 @@ onMounted(() => { if (!isAdmin.value) init() }) // 后台页无需拉运势
   color: var(--ink);
 }
 .view-tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+/* 今日/本周切换：与顶部 view-tabs 同款的等宽小 caps，居中一小组 */
+.scope-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin: 2px 0 18px;
+}
+.scope-tab {
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 6px 2px 9px;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--ink-dim2);
+  cursor: pointer;
+  transition: color 0.25s, border-color 0.25s;
+}
+.scope-tab:hover {
+  color: var(--ink);
+}
+.scope-tab.active {
   color: var(--gold);
   border-bottom-color: var(--gold);
 }
