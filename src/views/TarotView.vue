@@ -2,6 +2,46 @@
   <div class="tarot-view">
     <!-- ===== 每日塔罗（进入标签页即自动加载，无需点击） ===== -->
     <section class="glass-card daily" :class="{ refreshing: dailyLoading && daily }">
+      <!-- ===== 每日心情：本浏览器记录（key/结构与小程序端一致），心情曲线 + 分布 + 文本列表 ===== -->
+      <div class="daily-mood">
+        <p class="mood-heading">今天心情如何？<span class="mood-optional">可选 · {{ todayStr }}</span></p>
+        <div class="mood-options">
+          <button
+            v-for="m in MOODS"
+            :key="m"
+            type="button"
+            class="mood-option"
+            :class="{ 'is-active': todayMood === m }"
+            :aria-pressed="todayMood === m"
+            @click="selectMood(m)"
+          >{{ m }}</button>
+        </div>
+        <p class="mood-hint">{{ todayMood ? `已记录：${todayMood} · 点击其他心情可修改` : '点选即可记录，也可以直接看牌' }}</p>
+        <p v-if="moodError" class="error-line" role="alert">{{ moodError }}</p>
+        <button v-if="moodRecords.length" type="button" class="mood-history-toggle" :aria-expanded="moodHistoryOpen" @click="toggleMoodHistory">
+          {{ moodHistoryOpen ? '收起心情记录 −' : '查看心情记录 +' }}
+        </button>
+        <template v-if="moodHistoryOpen && moodRecords.length">
+          <!-- 心情曲线：≥2 天记录才绘制；不足时空态提示，绝不画假图 -->
+          <div v-if="moodCurve.length >= 2" class="mood-chart-box">
+            <p class="mood-chart-title">心情曲线 <span class="mood-chart-title-en mono">MOOD CURVE</span></p>
+            <MoodChart :curve="moodCurve" />
+          </div>
+          <p v-else class="mood-empty">记录几天后就能看到心情曲线 ✦</p>
+          <!-- 近 30 天心情分布（横向条形，按分数从高到低） -->
+          <div v-if="moodDist.length" class="mood-dist" aria-label="近 30 天心情分布">
+            <div v-for="d in moodDist" :key="d.mood" class="mood-dist-row">
+              <span class="mood-dist-name">{{ d.mood }}</span>
+              <span class="mood-dist-track"><span class="mood-dist-bar" :style="{ width: d.pct + '%' }"></span></span>
+              <span class="mood-dist-count mono">{{ d.count }} 天</span>
+            </div>
+          </div>
+          <div class="mood-history">
+            <p v-for="r in moodRecords" :key="r.date" class="mood-record"><span>{{ r.date }}</span><span>{{ r.mood }}</span></p>
+          </div>
+        </template>
+        <p class="mood-storage">仅保存在当前浏览器 · 保留最近 30 个记录日</p>
+      </div>
       <div v-if="dailyError" class="t-state">
         <p class="t-state-icon">✧</p>
         <p class="t-state-text">{{ dailyError }}</p>
@@ -337,6 +377,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import TarotCardFace from '../components/TarotCardFace.vue'
 import TarotFlipCard from '../components/TarotFlipCard.vue'
+import MoodChart from '../components/MoodChart.vue'
 import { fetchTarotDaily, drawTarot, fetchTarotCards, fetchTarotReading } from '../api'
 
 /* ===== 每日塔罗 ===== */
@@ -359,6 +400,89 @@ async function loadDaily() {
     dailyLoading.value = false
   }
 }
+
+/* ===== 每日心情：本浏览器记录（key/结构与小程序端一致：starwhisper:daily-moods:v1） ===== */
+const MOOD_KEY = 'starwhisper:daily-moods:v1'
+const MOODS = ['平静', '开心', '期待', '纠结', '疲惫', '低落']
+// 心情分数映射（0-5 分制，与运势页评分同刻度，供心情曲线图使用）：
+// 开心 5 / 期待 4 / 平静 3 / 纠结 2 / 疲惫 1.5 / 低落 1。
+// 疲惫定为 1.5 而非 1：它是精力状态而非情绪谷底，避免与「低落」并列最低档。
+// 键序即分布统计的展示顺序（高分 → 低分）。
+const MOOD_SCORES = { 开心: 5, 期待: 4, 平静: 3, 纠结: 2, 疲惫: 1.5, 低落: 1 }
+// 心情 → 分数；未知心情返回 null（图表与统计自动跳过）
+function moodScore(mood) {
+  return MOOD_SCORES[mood] != null ? MOOD_SCORES[mood] : null
+}
+// 心情曲线数据：任意顺序的记录 → 日期升序 [{date, day:'MM-DD', mood, score}]，非法项跳过
+function buildMoodCurve(records) {
+  if (!Array.isArray(records)) return []
+  return records
+    .filter((r) => r && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && moodScore(r.mood) != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((r) => ({ date: r.date, day: r.date.slice(5), mood: r.mood, score: moodScore(r.mood) }))
+}
+// 近 30 天心情分布：按分数从高到低 [{mood, score, count, pct}]，只列出现过的记录；
+// pct 为相对最多项的百分比（条形宽度用），全为 0 时返回 []
+function buildMoodDist(records) {
+  const counts = {}
+  ;(Array.isArray(records) ? records : []).forEach((r) => {
+    if (r && moodScore(r.mood) != null) counts[r.mood] = (counts[r.mood] || 0) + 1
+  })
+  const list = Object.keys(MOOD_SCORES)
+    .map((mood) => ({ mood, score: MOOD_SCORES[mood], count: counts[mood] || 0 }))
+    .filter((d) => d.count > 0)
+  const max = list.reduce((m, d) => Math.max(m, d.count), 0) || 1
+  list.forEach((d) => { d.pct = Math.round((d.count / max) * 100) })
+  return list
+}
+const moodRecords = ref([])      // [{date:'YYYY-MM-DD', mood}]，日期降序，最多 30 条
+const todayMood = ref('')
+const moodHistoryOpen = ref(false)
+const moodError = ref('')
+// 心情曲线点（升序）与分布（条形图），全部由真实本地记录派生
+const moodCurve = computed(() => buildMoodCurve(moodRecords.value))
+const moodDist = computed(() => buildMoodDist(moodRecords.value))
+function readMoods() {
+  let saved
+  try { saved = JSON.parse(localStorage.getItem(MOOD_KEY) || '[]') } catch { return [] }
+  if (!Array.isArray(saved)) return []
+  const seen = new Set()
+  return saved.filter((item) => {
+    if (!item || !/^\d{4}-\d{2}-\d{2}$/.test(item.date) || !MOODS.includes(item.mood) || seen.has(item.date)) return false
+    seen.add(item.date)
+    return true
+  }).map(({ date, mood }) => ({ date, mood })).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30)
+}
+function refreshMood() {
+  try {
+    moodRecords.value = readMoods()
+    const todayItem = moodRecords.value.find((r) => r.date === todayStr)
+    todayMood.value = todayItem ? todayItem.mood : ''
+    moodError.value = ''
+  } catch {
+    moodRecords.value = []
+    todayMood.value = ''
+    moodError.value = '暂时无法读取心情记录，请刷新页面重试'
+  }
+}
+function selectMood(mood) {
+  if (!MOODS.includes(mood)) return
+  try {
+    const records = readMoods().filter((r) => r.date !== todayStr)
+    const next = [{ date: todayStr, mood }, ...records].slice(0, 30)
+    localStorage.setItem(MOOD_KEY, JSON.stringify(next))
+    moodRecords.value = next
+    todayMood.value = mood
+    moodError.value = ''
+  } catch {
+    moodError.value = '心情未保存，请稍后再试'
+  }
+}
+function toggleMoodHistory() {
+  refreshMood()
+  moodHistoryOpen.value = !moodHistoryOpen.value
+}
+onMounted(refreshMood)
 
 /* ===== 抽牌仪式（牌阵系统：日常 4 阵 + 进阶大牌阵 celtic/hexagram） ===== */
 const SPREAD_GROUPS = [
@@ -709,6 +833,7 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 /* ===== 每日塔罗 ===== */
 .daily {
   display: flex;
+  flex-wrap: wrap; /* 心情区独占整行，牌面与信息面板换行并排 */
   gap: 32px;
   padding: 28px 30px;
   transition: opacity 0.25s ease;
@@ -716,6 +841,149 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 .daily.refreshing {
   opacity: 0.55;
   pointer-events: none;
+}
+
+/* ===== 每日心情（与小程序端塔罗页同款：按钮网格 + 曲线 + 分布 + 文本列表） ===== */
+.daily-mood {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--gold-hairline);
+}
+.mood-heading {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.mood-optional,
+.mood-hint {
+  font-size: 12.5px;
+  color: var(--ink-dim2);
+  line-height: 1.7;
+}
+.mood-hint { margin-top: 8px; }
+.mood-options {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.mood-option {
+  padding: 9px 4px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  background: rgba(7, 11, 30, 0.25);
+  border: 1px solid var(--gold-hairline);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.25s, color 0.25s, background 0.25s;
+}
+.mood-option:hover {
+  border-color: var(--gold-dim);
+}
+.mood-option.is-active {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(232, 196, 124, 0.1);
+}
+.mood-history-toggle {
+  margin-top: 8px;
+  padding: 6px 0;
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.mood-history-toggle:hover { text-decoration: underline; }
+/* 心情曲线与分布（配色对齐 TrendChart：香槟金主线 + 深空底） */
+.mood-chart-box { margin-top: 12px; }
+.mood-chart-title {
+  font-size: 13.5px;
+  letter-spacing: 0.18em;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.mood-chart-title-en {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--ink-dim2);
+  margin-left: 8px;
+}
+.mood-empty {
+  margin-top: 12px;
+  padding: 20px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-dim2);
+  text-align: center;
+  border: 1px dashed var(--gold-hairline);
+  border-radius: 6px;
+}
+.mood-dist {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mood-dist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mood-dist-name {
+  flex: none;
+  width: 42px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.mood-dist-track {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(139, 135, 176, 0.15);
+  overflow: hidden;
+}
+.mood-dist-bar {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(232, 196, 124, 0.35), var(--gold));
+}
+.mood-dist-count {
+  flex: none;
+  width: 48px;
+  font-size: 11.5px;
+  color: var(--ink-dim2);
+  text-align: right;
+}
+.mood-history {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 14px;
+}
+.mood-record {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink);
+  border-bottom: 1px solid var(--gold-hairline);
+}
+.mood-storage {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-dim2);
 }
 .daily-face {
   flex: none;

@@ -13,12 +13,12 @@ function setup(storage = {}, api = {}) {
     drawTarot: api.drawTarot || (async () => ({ cards: [] })),
     fetchTarotReading: api.fetchTarotReading,
     localStorage: {
-      getItem: key => key.includes('tarot-session') ? storage.session ?? null : storage.value ?? null,
+      getItem: key => key.includes('tarot-session') ? storage.session ?? null : key.includes('daily-moods') ? storage.moods ?? null : storage.value ?? null,
       removeItem: () => { if (storage.fail) throw new Error('quota'); delete storage.session },
-      setItem: (key, value) => { if (storage.fail) throw new Error('quota'); if (key.includes('tarot-session')) storage.session = value; else storage.value = value }
+      setItem: (key, value) => { if (storage.fail) throw new Error('quota'); if (key.includes('tarot-session')) storage.session = value; else if (key.includes('daily-moods')) storage.moods = value; else storage.value = value }
     }
   }
-  vm.runInNewContext(source + '\nthis.page = { drawn, revealedCount, nextCard, revealNext, revealAll, resetDraw, doDraw, daily, lessonOpen, markLearned, todayLearned, learnedCards, studyError, readLearnedCards, picking, drawError, selectDetail, detailCard, detailIndex, drawId, readWithAi, aiLoading, aiResult, aiError, aiQuestion, saveSnapshot, restoreSnapshot, snapshotError, spread };', context)
+  vm.runInNewContext(source + '\nthis.page = { drawn, revealedCount, nextCard, revealNext, revealAll, resetDraw, doDraw, daily, lessonOpen, markLearned, todayLearned, learnedCards, studyError, readLearnedCards, picking, drawError, selectDetail, detailCard, detailIndex, drawId, readWithAi, aiLoading, aiResult, aiError, aiQuestion, saveSnapshot, restoreSnapshot, snapshotError, spread, moodRecords, todayMood, moodHistoryOpen, moodError, moodCurve, moodDist, selectMood, refreshMood, toggleMoodHistory, moodScore, buildMoodCurve, buildMoodDist };', context)
   return context.page
 }
 
@@ -139,4 +139,98 @@ test('本地保存失败不会打断抽牌和揭晓', async () => {
   await page.doDraw(); page.revealAll()
   assert.equal(page.drawn.value.length,1)
   assert.match(page.snapshotError.value,/未能保存/)
+})
+
+// 心情曲线/分布数组产自 vm 沙箱（Array 原型不同），统一 JSON 化后再比较
+const j = (v) => JSON.parse(JSON.stringify(v))
+
+test('心情分数映射：6 档分值与未知心情（与小程序端一致）', () => {
+  const page = setup()
+  assert.equal(page.moodScore('开心'), 5)
+  assert.equal(page.moodScore('期待'), 4)
+  assert.equal(page.moodScore('平静'), 3)
+  assert.equal(page.moodScore('纠结'), 2)
+  assert.equal(page.moodScore('疲惫'), 1.5) // 精力状态而非情绪谷底，不与低落并列
+  assert.equal(page.moodScore('低落'), 1)
+  assert.equal(page.moodScore('兴奋'), null)
+  assert.equal(page.moodScore(''), null)
+  assert.equal(page.moodScore(undefined), null)
+})
+
+test('心情曲线：非法项跳过、按日期升序、空/单条不产出曲线', () => {
+  const page = setup()
+  assert.deepEqual(j(page.buildMoodCurve([])), [])
+  assert.deepEqual(j(page.buildMoodCurve(null)), [])
+  assert.equal(j(page.buildMoodCurve([{ date: '2026-01-01', mood: '开心' }])).length, 1)
+  const curve = j(page.buildMoodCurve([
+    { date: '2026-01-03', mood: '低落' },
+    { date: '2026-01-01', mood: '开心' },
+    { date: 'bad', mood: '开心' },
+    { date: '2026-01-02', mood: '无效心情' }
+  ]))
+  assert.deepEqual(curve.map((p) => p.day), ['01-01', '01-03'])
+  assert.deepEqual(curve.map((p) => p.score), [5, 1])
+  assert.deepEqual(curve.map((p) => p.mood), ['开心', '低落'])
+})
+
+test('心情分布：按分数降序、计数正确、pct 相对最多项、未出现的心情不列出', () => {
+  const page = setup()
+  assert.deepEqual(j(page.buildMoodDist(null)), [])
+  assert.deepEqual(j(page.buildMoodDist([])), [])
+  const dist = j(page.buildMoodDist([
+    { date: '2026-01-01', mood: '开心' },
+    { date: '2026-01-02', mood: '开心' },
+    { date: '2026-01-03', mood: '低落' },
+    { date: '2026-01-04', mood: '无效心情' }
+  ]))
+  assert.deepEqual(dist, [
+    { mood: '开心', score: 5, count: 2, pct: 100 },
+    { mood: '低落', score: 1, count: 1, pct: 50 }
+  ])
+})
+
+test('每日心情：当天修改不重复，重新进入恢复，损坏缓存可恢复，独立于学习记录', () => {
+  const storage = { value: '[1,2]' }
+  const page = setup(storage)
+  page.refreshMood()
+  page.selectMood('平静')
+  page.selectMood('期待')
+  assert.equal(JSON.parse(storage.moods).length, 1)
+  assert.equal(page.todayMood.value, '期待')
+  assert.equal(storage.value, '[1,2]') // 学习记录 key 不受影响
+  const reopened = setup(storage)
+  reopened.refreshMood()
+  assert.equal(reopened.todayMood.value, '期待')
+  assert.equal(j(reopened.moodCurve.value).length, 1) // 单条记录 → 空态（模板据此不画曲线）
+  page.selectMood('无效心情')
+  assert.equal(JSON.parse(storage.moods).length, 1)
+  // 损坏缓存 → 空记录而不是抛错
+  const broken = setup({ moods: '{broken' })
+  broken.refreshMood()
+  assert.equal(broken.moodRecords.value.length, 0)
+  assert.equal(broken.moodError.value, '')
+})
+
+test('每日心情：写入失败不显示保存成功，重试可更新；历史驱动曲线与分布', () => {
+  const storage = {}
+  const page = setup(storage)
+  page.refreshMood()
+  page.selectMood('平静')
+  storage.fail = true
+  page.selectMood('疲惫')
+  assert.equal(page.todayMood.value, '平静')
+  assert.match(page.moodError.value, /未保存/)
+  storage.fail = false
+  page.selectMood('疲惫')
+  assert.equal(page.todayMood.value, '疲惫')
+  assert.equal(page.moodError.value, '')
+  // 已有 2 天历史 → 曲线 2 个点（升序），分布计数正确
+  const withHistory = setup({ moods: JSON.stringify([
+    { date: '2026-01-02', mood: '期待' },
+    { date: '2026-01-01', mood: '平静' }
+  ]) })
+  withHistory.refreshMood()
+  assert.deepEqual(j(withHistory.moodCurve.value).map((p) => p.date), ['2026-01-01', '2026-01-02'])
+  assert.deepEqual(j(withHistory.moodCurve.value).map((p) => p.score), [3, 4])
+  assert.equal(j(withHistory.moodDist.value).length, 2)
 })

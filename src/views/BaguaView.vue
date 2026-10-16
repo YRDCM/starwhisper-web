@@ -95,6 +95,24 @@
           </template>
         </div>
 
+        <div v-if="showResult" class="ai-reading">
+          <p class="m-label">Kimi · AI 解卦 <span class="ai-badge">游客可用</span></p>
+          <label for="bagua-question" class="spread-hint">你想问什么？（选填，最多 300 字）</label>
+          <textarea id="bagua-question" v-model="aiQuestion" maxlength="300" rows="2" :disabled="aiLoading || !!aiResult"
+            placeholder="例如：这次换工作，我应该注意什么？" />
+          <p class="ai-note">点击后会将问题与卦象发送给 Kimi，仅供娱乐与自我探索。每次起卦生成一次，同一网络有每日限额。</p>
+          <button v-if="!aiResult" type="button" class="b-btn ai-btn" :disabled="aiLoading" @click="readWithAi">
+            {{ aiLoading ? '正在结合卦象解读…' : '用 Kimi 解读这一卦' }}
+          </button>
+          <p v-if="aiError" class="error-line" role="alert">{{ aiError }}</p>
+          <div v-if="aiResult" class="ai-result" aria-live="polite">
+            <p class="ai-text">{{ aiResult.summary }}</p>
+            <button type="button" class="detail-toggle" :aria-expanded="aiExpanded" @click="aiExpanded = !aiExpanded">{{ aiExpanded ? '收起详细解读 −' : '卦象联系与行动建议 +' }}</button>
+            <p v-if="aiExpanded" class="ai-text ai-detail">{{ aiResult.detail }}</p>
+            <p class="ai-note ai-disclaimer">AI 解读 · 仅供参考</p>
+          </div>
+        </div>
+
         <div v-if="showResult" class="cast-again">
           <button type="button" class="b-btn" @click="resetCast">重新起卦</button>
         </div>
@@ -150,9 +168,9 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import HexagramGlyph from '../components/HexagramGlyph.vue'
-import { fetchBaguaDaily, castBagua, fetchHexagrams } from '../api'
+import { fetchBaguaDaily, castBagua, fetchHexagrams, fetchBaguaReading } from '../api'
 
 const todayStr = new Date().toISOString().slice(0, 10)
 
@@ -195,6 +213,41 @@ const castError = ref('')
 const revealedCount = ref(0)  // 已显现爻数（自下而上：revealedCount >= position 即显现）
 const showResult = ref(false)
 
+/* ===== Kimi AI 解卦（状态与塔罗页 AI 解牌对齐） ===== */
+const aiQuestion = ref('')
+const aiLoading = ref(false)
+const aiResult = ref(null)
+const aiError = ref('')
+const aiExpanded = ref(false)
+let disposed = false
+onUnmounted(() => { disposed = true })
+
+function clearAiReading() {
+  aiQuestion.value = ''; aiLoading.value = false; aiResult.value = null; aiError.value = ''; aiExpanded.value = false
+}
+
+async function readWithAi() {
+  const cast = castResult.value
+  if (!cast || !showResult.value || aiLoading.value || aiResult.value) return
+  aiLoading.value = true
+  aiError.value = ''
+  try {
+    const result = await fetchBaguaReading({
+      primarySeq: cast.primary.seqNumber,
+      changedSeq: cast.changed ? cast.changed.seqNumber : null,
+      changingLines: cast.changingLines || [],
+      question: aiQuestion.value.trim()
+    })
+    if (disposed || cast !== castResult.value) return
+    if (!result?.summary || !result?.detail) throw new Error('未收到完整解读，请稍后重试')
+    aiResult.value = result
+  } catch (e) {
+    if (!disposed && cast === castResult.value) aiError.value = e.message || '解读失败，请稍后重试'
+  } finally {
+    if (!disposed && cast === castResult.value) aiLoading.value = false
+  }
+}
+
 function lineAt(pos) {
   // linesDetail 按 position 1-6 自下而上排列
   return castResult.value.linesDetail.find((l) => l.position === pos)
@@ -213,6 +266,7 @@ async function doCast() {
     castResult.value = await castBagua()
     revealedCount.value = 0
     showResult.value = false
+    clearAiReading()
     // 逐爻显现：每 220ms 一爻，自初爻（底）至上爻（顶）
     const timer = setInterval(() => {
       revealedCount.value += 1
@@ -234,6 +288,7 @@ function resetCast() {
   revealedCount.value = 0
   showResult.value = false
   castError.value = ''
+  clearAiReading()
 }
 
 /* ===== 六十四卦（首次展开懒加载） ===== */
@@ -634,8 +689,89 @@ onMounted(loadDaily) // 进入标签页即自动加载每日一卦
   text-overflow: ellipsis;
 }
 
-/* ===== 状态与错误 ===== */
-.b-state {
+/* ===== Kimi AI 解卦（样式与塔罗页 ai-reading 区块一致） ===== */
+.ai-reading {
+  margin-top: 22px;
+  padding: 20px;
+  border: 1px solid var(--gold-hairline);
+  border-radius: 12px;
+}
+.m-label {
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.ai-badge {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--ink-dim);
+}
+.spread-hint {
+  display: block;
+  color: var(--ink-dim);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 12px 0 8px;
+}
+.ai-reading textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+  max-height: 220px;
+  padding: 12px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--gold-hairline);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ai-reading textarea:focus {
+  outline: 1px solid var(--gold);
+}
+.ai-note {
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 10px 0 16px;
+}
+.ai-disclaimer {
+  margin: 12px 0 0;
+}
+.ai-btn {
+  width: 100%;
+  letter-spacing: 0.15em;
+  text-indent: 0.15em;
+}
+.ai-result {
+  margin-top: 14px;
+}
+.ai-text {
+  font-size: 14px;
+  line-height: 1.85;
+  color: rgba(232, 230, 240, 0.9);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-detail {
+  white-space: pre-wrap;
+}
+.detail-toggle {
+  display: block;
+  width: fit-content;
+  padding: 8px 0;
+  background: transparent;
+  border: 0;
+  color: var(--gold);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ===== 状态与错误 ===== */.b-state {
   width: 100%;
   padding: 40px 0;
   text-align: center;
@@ -690,6 +826,9 @@ onMounted(loadDaily) // 进入标签页即自动加载每日一卦
   }
   .hex-grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+  .ai-reading {
+    padding: 16px;
   }
   .modal {
     flex-direction: column;

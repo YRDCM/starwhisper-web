@@ -109,6 +109,11 @@ export function fetchHexagrams() {
   return http.get('/bagua/hexagrams')
 }
 
+/** Kimi AI 解卦：payload = { primarySeq, changedSeq, changingLines, question }，响应 { summary, detail } 同塔罗 */
+export function fetchBaguaReading(payload) {
+  return http.post('/bagua/ai-reading', payload, { timeout: 60000 })
+}
+
 /** 星座配对：star 支持 nameEn 或中文名；gender 1男0女，可空 */
 export function fetchMatch(star1, star2, gender1, gender2) {
   const params = { star1, star2 }
