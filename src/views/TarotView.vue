@@ -686,7 +686,19 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 .lesson-body { margin-top: 20px; display: grid; gap: 12px; }
 .lesson-body .t-btn { justify-self: start; }
 .reveal-guide { border: 1px solid var(--gold-hairline); border-radius: 12px; padding: 20px; margin: 20px 0; }
-.reveal-guide .stage-actions { flex-wrap: wrap; }
+.reveal-guide .stage-actions { flex-wrap: wrap; gap: 10px; }
+/* 翻牌按钮：小字号 + 禁止换行，窄屏也保持一行 */
+.reveal-guide .stage-actions .t-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 9px 14px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-indent: 0.1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .spread-hint { color: var(--ink-dim); font-size: 14px; line-height: 1.7; margin: 12px 0; }
 .tarot-view {
   display: flex;
