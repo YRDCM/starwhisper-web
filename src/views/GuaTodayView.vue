@@ -37,6 +37,25 @@
             <p class="block-label mono">今日建议 · ADVICE</p>
             <p class="block-text advice">{{ gua.advice }}</p>
           </div>
+
+          <!-- ===== Kimi AI 解卦（与起卦页同款；演示数据无卦序不可用） ===== -->
+          <div v-if="!demo && gua.id" class="ai-reading">
+            <p class="m-label">Kimi · AI 解卦 <span class="ai-badge">游客可用</span></p>
+            <label for="gua-question" class="spread-hint">你想问什么？（选填，最多 300 字）</label>
+            <textarea id="gua-question" v-model="aiQuestion" maxlength="300" rows="2" :disabled="aiLoading || !!aiResult"
+              placeholder="例如：今天适合推进哪件事？" />
+            <p class="ai-note">点击后会将问题与卦象发送给 Kimi，仅供娱乐与自我探索。每日一卦每天生成一次，同一网络有每日限额。</p>
+            <button v-if="!aiResult" type="button" class="g-btn ai-btn" :disabled="aiLoading" @click="readWithAi">
+              {{ aiLoading ? '正在结合卦象解读…' : '用 Kimi 解读这一卦' }}
+            </button>
+            <p v-if="aiError" class="error-line" role="alert">{{ aiError }}</p>
+            <div v-if="aiResult" class="ai-result" aria-live="polite">
+              <p class="ai-text">{{ aiResult.summary }}</p>
+              <button type="button" class="detail-toggle" :aria-expanded="aiExpanded" @click="aiExpanded = !aiExpanded">{{ aiExpanded ? '收起详细解读 −' : '卦象联系与行动建议 +' }}</button>
+              <p v-if="aiExpanded" class="ai-text ai-detail">{{ aiResult.detail }}</p>
+              <p class="ai-note ai-disclaimer">AI 解读 · 仅供参考</p>
+            </div>
+          </div>
         </div>
       </template>
     </section>
@@ -44,8 +63,8 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import { fetchHexagramToday } from '../api'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { fetchHexagramToday, fetchBaguaReading } from '../api'
 
 const todayStr = new Date().toISOString().slice(0, 10)
 
@@ -138,6 +157,39 @@ async function load() {
     demo.value = true
   } finally {
     loading.value = false
+  }
+  // 重新加载（跨天/重连）时清掉上一卦的 AI 解读
+  aiQuestion.value = ''; aiLoading.value = false; aiResult.value = null; aiError.value = ''; aiExpanded.value = false
+}
+
+/* ===== Kimi AI 解卦（与起卦页同一接口：每日一卦无变爻，只传本卦卦序） ===== */
+const aiQuestion = ref('')
+const aiLoading = ref(false)
+const aiResult = ref(null)
+const aiError = ref('')
+const aiExpanded = ref(false)
+let disposed = false
+onUnmounted(() => { disposed = true })
+
+async function readWithAi() {
+  const g = gua.value
+  if (!g || !g.id || demo.value || aiLoading.value || aiResult.value) return
+  aiLoading.value = true
+  aiError.value = ''
+  try {
+    const result = await fetchBaguaReading({
+      primarySeq: g.id,
+      changedSeq: null,
+      changingLines: [],
+      question: aiQuestion.value.trim()
+    })
+    if (disposed || g !== gua.value) return
+    if (!result?.summary || !result?.detail) throw new Error('未收到完整解读，请稍后重试')
+    aiResult.value = result
+  } catch (e) {
+    if (!disposed && g === gua.value) aiError.value = e.message || '解读失败，请稍后重试'
+  } finally {
+    if (!disposed && g === gua.value) aiLoading.value = false
   }
 }
 
@@ -310,5 +362,93 @@ onMounted(load)
   .gua-panel {
     width: 100%;
   }
+}
+
+/* ===== Kimi AI 解卦（样式与起卦页一致） ===== */
+.ai-reading {
+  margin-top: 22px;
+  padding: 20px;
+  border: 1px solid var(--gold-hairline);
+  border-radius: 12px;
+}
+.m-label {
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.ai-badge {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--ink-dim);
+}
+.spread-hint {
+  display: block;
+  color: var(--ink-dim);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 12px 0 8px;
+}
+.ai-reading textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+  max-height: 220px;
+  padding: 12px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--gold-hairline);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ai-reading textarea:focus {
+  outline: 1px solid var(--gold);
+}
+.ai-note {
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 10px 0 16px;
+}
+.ai-disclaimer {
+  margin: 12px 0 0;
+}
+.ai-btn {
+  width: 100%;
+  letter-spacing: 0.15em;
+  text-indent: 0.15em;
+}
+.ai-result {
+  margin-top: 14px;
+}
+.ai-text {
+  font-size: 14px;
+  line-height: 1.85;
+  color: rgba(232, 230, 240, 0.9);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-detail {
+  white-space: pre-wrap;
+}
+.detail-toggle {
+  display: block;
+  width: fit-content;
+  padding: 8px 0;
+  background: transparent;
+  border: 0;
+  color: var(--gold);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.error-line {
+  color: #d98a8a;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 10px 0 0;
 }
 </style>
