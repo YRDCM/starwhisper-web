@@ -41,6 +41,7 @@ http.interceptors.response.use(
   },
   (err) => {
     const status = err.response?.status
+    if (status) err.status = status // 透出 HTTP 状态码（后台页据此识别 403 回门禁）
     if (status === 401) {
       setToken('')
       err.code = 401
@@ -164,7 +165,28 @@ export function fetchHexagramToday(openid) {
 }
 
 /** 后台统计（管理 key）：{userCount, todayNewUsers, todayActive, checkinTotal,
- *  todayCheckins, tarotTotal, spreadDist:[{spread,count}], dailyNewUsers:[{date,count}]} */
+ *  todayCheckins, tarotTotal, baguaTotal, matchTotal, spreadDist:[{spread,count}],
+ *  dailyNewUsers/dailyActive:[{date,count}], aiTodayUsed, aiGlobalLimit, aiGlobalRemaining, subscribeActive} */
 export function fetchAdminStats(key) {
   return http.get('/admin/stats', { params: { key } })
+}
+
+/** 后台用户分页：{list, total, page, size}；params 由 buildUsersQuery 组装（page/size/keyword?） */
+export function fetchAdminUsers(key, params) {
+  return http.get('/admin/users', { params: { ...params, key } })
+}
+
+/** 后台用户详情：{user, checkin, histories:[{type,title,createdAt}]} */
+export function fetchAdminUserDetail(key, id) {
+  return http.get(`/admin/users/${id}`, { params: { key } })
+}
+
+/** 后台配置项列表：[{key, value, desc, updatedAt}] */
+export function fetchAdminConfig(key) {
+  return http.get('/admin/config', { params: { key } })
+}
+
+/** 更新配置项：body {key: 配置项, value}；管理 key 走 query */
+export function saveAdminConfig(adminKey, configKey, value) {
+  return http.put('/admin/config', { key: configKey, value }, { params: { key: adminKey } })
 }
