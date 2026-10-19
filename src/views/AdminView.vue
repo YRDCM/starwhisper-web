@@ -916,12 +916,31 @@ onBeforeUnmount(() => {
 .today-badge {
   position: static;
 }
-/* 历史列表限高滚动 */
-.history-scroll {
-  max-height: 300px;
+/* 第二行两列等高：固定高度，内容超出内部滚动 */
+.detail-grid > .detail-block:not(.checkin-block) {
+  display: flex;
+  flex-direction: column;
+  height: 320px;
+  min-width: 0;
+}
+.detail-grid > .detail-block:not(.checkin-block) .history-scroll,
+.detail-grid > .detail-block:not(.checkin-block) .usage-events {
+  flex: 1;
   overflow-y: auto;
   padding-right: 6px;
 }
+/* 使用胶囊在窄列里两枚一行 */
+.usage-chips {
+  align-content: flex-start;
+}
+.usage-chip {
+  flex: 1 1 calc(50% - 8px);
+  text-align: center;
+  white-space: nowrap;
+}
+/* 历史列表滚动条 */
+.history-scroll::-webkit-scrollbar, .usage-events::-webkit-scrollbar { width: 4px; }
+.history-scroll::-webkit-scrollbar-thumb, .usage-events::-webkit-scrollbar-thumb { background: rgba(232, 196, 124, 0.25); border-radius: 2px; }
 .history-scroll::-webkit-scrollbar { width: 4px; }
 .history-scroll::-webkit-scrollbar-thumb { background: rgba(232, 196, 124, 0.25); border-radius: 2px; }
 .detail-title {
@@ -1135,8 +1154,5 @@ onBeforeUnmount(() => {
   border-style: dashed;
   border-color: rgba(139, 135, 176, 0.25);
   background: transparent;
-}
-.usage-events {
-  margin-top: 4px;
 }
 </style>
