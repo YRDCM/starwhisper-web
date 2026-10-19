@@ -102,7 +102,8 @@ function setupAdminPage(storage, api) {
     ref, computed, nextTick, onBeforeUnmount,
     echarts: { init: () => { const c = { setOption(o) { this.option = o }, resize() {}, dispose() {} }; charts.push(c); return c } },
     fetchAdminStats: api.stats, fetchAdminUsers: api.users,
-    fetchAdminUserDetail: api.userDetail, fetchAdminConfig: api.config, saveAdminConfig: api.saveConfig,
+    fetchAdminUserDetail: api.userDetail, fetchAdminUserDailyUsage: api.dailyUsage,
+    fetchAdminConfig: api.config, saveAdminConfig: api.saveConfig,
     ...logic,
     localStorage: {
       getItem: (k) => storage[k] ?? null,
@@ -117,6 +118,7 @@ function setupAdminPage(storage, api) {
   vm.runInNewContext(source + `
 this.page = { gated, submitKey, keyInput, gateError, tab, switchTab, stats, cards, loadStats,
   usersList, usersTotal, page, pageCount, keywordInput, searchUsers, gotoPage, toggleUser, expandedId, detail,
+  usage, usageDate, loadUsage,
   configItems, loadConfig, saveConfig, TABS }
 // template ref 在真实运行时由 Vue 注入；测试里直接赋桩对象
 lineRef.value = {}; barRef.value = {};`, context)
@@ -163,6 +165,11 @@ test('整页冒烟：用户 tab 搜索/翻页/展开详情，配置 tab 保存�
       return { list: [{ id: 1, nickname: '星野', signNameEn: 'aries', createdAt: '2026-10-01T10:00:00', totalCheckins: 5, currentStreak: 2, lastActiveAt: null }], total: 41, page: params.page, size: params.size }
     },
     userDetail: async () => ({ user: { id: 1, nickname: '星野' }, checkin: { currentStreak: 2, maxStreak: 4, totalDays: 5, todayChecked: true }, histories: [{ type: 'TAROT', title: '单牌指引', createdAt: '2026-10-18T20:00:00' }] }),
+    dailyUsage: async (key, id, date) => ({
+      userId: id, date: date || '2026-10-19',
+      modules: [{ key: 'tarot', name: '塔罗抽牌', count: 2 }, { key: 'fortune', name: '星运浏览', count: null }],
+      events: [{ time: '09:00', type: 'TAROT', title: '单牌指引' }]
+    }),
     config: async () => [{ key: 'ai.perIpDailyLimit', value: '3', desc: '每 IP 限额', updatedAt: null }],
     saveConfig: async (adminKey, configKey, value) => ({ key: configKey, value, desc: '', updatedAt: '2026-10-19T14:00:00' })
   }
@@ -192,6 +199,14 @@ test('整页冒烟：用户 tab 搜索/翻页/展开详情，配置 tab 保存�
   assert.equal(context.page.expandedId.value, 1)
   assert.equal(context.page.detail.value.checkin.currentStreak, 2)
   assert.equal(context.page.detail.value.histories.length, 1)
+
+  // 按日使用明细：展开后自动加载当天；换日期重新查
+  await new Promise((r) => setTimeout(r, 0))
+  assert.equal(context.page.usage.value.modules[0].count, 2)
+  assert.equal(context.page.usage.value.modules[1].count, null) // 未统计保持 null
+  context.page.usageDate.value = '2026-10-18'
+  await context.page.loadUsage(1)
+  assert.equal(context.page.usage.value.date, '2026-10-18')
 
   // 配置 tab：加载 → 编辑 → 保存 → 反馈
   context.page.switchTab('config')

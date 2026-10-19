@@ -181,6 +181,11 @@ export function fetchAdminUserDetail(key, id) {
   return http.get(`/admin/users/${id}`, { params: { key } })
 }
 
+/** 后台某用户某天的功能使用明细：{date, modules:[{key,name,count}], events:[{time,type,title}]} */
+export function fetchAdminUserDailyUsage(key, id, date) {
+  return http.get(`/admin/users/${id}/daily-usage`, { params: date ? { key, date } : { key } })
+}
+
 /** 后台配置项列表：[{key, value, desc, updatedAt}] */
 export function fetchAdminConfig(key) {
   return http.get('/admin/config', { params: { key } })

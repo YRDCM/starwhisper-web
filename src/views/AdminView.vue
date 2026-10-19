@@ -163,6 +163,31 @@
                             </li>
                           </ul>
                         </div>
+                        <!-- 按日使用明细：选日期看该用户当天用了哪些板块、各几次 + 时间线 -->
+                        <div class="detail-block usage-block">
+                          <p class="detail-title mono">按日使用 · DAILY USAGE</p>
+                          <p class="detail-line">
+                            <input type="date" class="usage-date mono" v-model="usageDate" :max="todayStr"
+                              @change="loadUsage(u.id)" @click.stop />
+                            <span v-if="usageLoading" class="dim"> 查询中…</span>
+                          </p>
+                          <template v-if="usage && !usageLoading">
+                            <div class="usage-chips">
+                              <span v-for="m in usage.modules" :key="m.key" class="usage-chip mono"
+                                :class="{ zero: m.count === 0, none: m.count == null }">
+                                {{ m.name }} {{ m.count == null ? '未统计' : m.count + ' 次' }}
+                              </span>
+                            </div>
+                            <p v-if="!(usage.events || []).length" class="detail-line dim">当日无行为记录</p>
+                            <ul v-else class="history-list usage-events">
+                              <li v-for="(ev, i) in usage.events" :key="i" class="mono">
+                                <span class="h-date dim">{{ ev.time }}</span>
+                                <span class="h-type" :data-type="ev.type">{{ historyTypeName(ev.type) }}</span>
+                                <span class="h-title">{{ ev.title || '（无摘要）' }}</span>
+                              </li>
+                            </ul>
+                          </template>
+                        </div>
                       </div>
                       <p v-else class="detail-line dim">详情加载失败 <button class="a-link mono" @click.stop="toggleUser(u.id, true)">重试</button></p>
                     </td>
@@ -226,7 +251,7 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import * as echarts from 'echarts'
 import {
-  fetchAdminStats, fetchAdminUsers, fetchAdminUserDetail,
+  fetchAdminStats, fetchAdminUsers, fetchAdminUserDetail, fetchAdminUserDailyUsage,
   fetchAdminConfig, saveAdminConfig
 } from '../api'
 import {
@@ -472,14 +497,36 @@ const expandedId = ref(null)
 const detail = ref(null)
 const detailLoading = ref(false)
 
+/* 按日使用明细（跟随展开的用户） */
+const todayStr = new Date().toISOString().slice(0, 10)
+const usageDate = ref(todayStr)
+const usage = ref(null)
+const usageLoading = ref(false)
+
+async function loadUsage(userId) {
+  if (!userId) return
+  usageLoading.value = true
+  try {
+    usage.value = await fetchAdminUserDailyUsage(adminKey.value, userId, usageDate.value)
+  } catch (e) {
+    if (handleAuthError(e)) return
+    usage.value = null
+  } finally {
+    usageLoading.value = false
+  }
+}
+
 async function toggleUser(id, force) {
   if (expandedId.value === id && !force) {
     expandedId.value = null
     detail.value = null
+    usage.value = null
     return
   }
   expandedId.value = id
   detail.value = null
+  usage.value = null
+  usageDate.value = todayStr // 每次展开默认看今天
   detailLoading.value = true
   try {
     detail.value = await fetchAdminUserDetail(adminKey.value, id)
@@ -489,6 +536,7 @@ async function toggleUser(id, force) {
   } finally {
     detailLoading.value = false
   }
+  loadUsage(id) // 使用明细与详情并行加载
 }
 
 /* ===== 模块三：参数配置 ===== */
@@ -1005,5 +1053,47 @@ onBeforeUnmount(() => {
   margin: 14px 0 0;
   font-size: 12px;
   color: var(--ink-dim2);
+}
+
+/* ===== 按日使用明细 ===== */
+.usage-block {
+  grid-column: 1 / -1;
+}
+.usage-date {
+  padding: 6px 10px;
+  border: 1px solid var(--gold-hairline);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--ink);
+  font-size: 13px;
+  color-scheme: dark;
+}
+.usage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.usage-chip {
+  padding: 4px 12px;
+  border: 1px solid var(--gold-hairline);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--gold);
+  background: rgba(232, 196, 124, 0.07);
+}
+.usage-chip.zero {
+  color: var(--ink-dim2);
+  border-color: rgba(139, 135, 176, 0.15);
+  background: transparent;
+}
+.usage-chip.none {
+  color: var(--ink-dim2);
+  border-style: dashed;
+  border-color: rgba(139, 135, 176, 0.25);
+  background: transparent;
+}
+.usage-events {
+  margin-top: 4px;
 }
 </style>
