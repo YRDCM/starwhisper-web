@@ -141,30 +141,20 @@
                     <td colspan="5">
                       <div v-if="detailLoading" class="detail-loading"><div class="spinner"></div></div>
                       <div v-else-if="detail" class="detail-grid">
-                        <div class="detail-block">
-                          <p class="detail-title mono">打卡汇总 · CHECKIN</p>
-                          <p class="detail-line">当前连续 <b class="gold-text">{{ detail.checkin?.currentStreak ?? 0 }}</b> 天 ·
-                            历史最长 <b class="gold-text">{{ detail.checkin?.maxStreak ?? 0 }}</b> 天 ·
-                            累计 <b class="gold-text">{{ detail.checkin?.totalDays ?? 0 }}</b> 天
+                        <!-- 顶部通栏：打卡汇总横排大数字 + 用户元信息 -->
+                        <div class="detail-block checkin-block">
+                          <div class="ck-stats">
+                            <div class="mini-stat"><b class="gold-text">{{ detail.checkin?.currentStreak ?? 0 }}</b><span>当前连续</span></div>
+                            <div class="mini-stat"><b class="gold-text">{{ detail.checkin?.maxStreak ?? 0 }}</b><span>历史最长</span></div>
+                            <div class="mini-stat"><b class="gold-text">{{ detail.checkin?.totalDays ?? 0 }}</b><span>累计打卡</span></div>
                             <span v-if="detail.checkin?.todayChecked" class="mono today-badge">今日已打卡</span>
-                          </p>
+                          </div>
                           <p class="detail-line dim mono" v-if="detail.user">
                             ID {{ detail.user.id }}<template v-if="detail.user.lastLoginAt"> · 最近登录 {{ formatDateTime(detail.user.lastLoginAt) }}</template>
                           </p>
                         </div>
+                        <!-- 左：按日使用（提升到第二行，不再被长列表压底） -->
                         <div class="detail-block">
-                          <p class="detail-title mono">最近历史 · HISTORY</p>
-                          <p v-if="!(detail.histories || []).length" class="detail-line dim">暂无占卜记录</p>
-                          <ul v-else class="history-list">
-                            <li v-for="(h, i) in detail.histories" :key="i" class="mono">
-                              <span class="h-type" :data-type="h.type">{{ historyTypeName(h.type) }}</span>
-                              <span class="h-title">{{ h.title || '（无摘要）' }}</span>
-                              <span class="h-date dim">{{ formatDateTime(h.createdAt) }}</span>
-                            </li>
-                          </ul>
-                        </div>
-                        <!-- 按日使用明细：选日期看该用户当天用了哪些板块、各几次 + 时间线 -->
-                        <div class="detail-block usage-block">
                           <p class="detail-title mono">按日使用 · DAILY USAGE</p>
                           <p class="detail-line">
                             <input type="date" class="usage-date mono" v-model="usageDate" :max="todayStr"
@@ -187,6 +177,18 @@
                               </li>
                             </ul>
                           </template>
+                        </div>
+                        <!-- 右：最近历史（限高滚动，不再把下方内容顶走） -->
+                        <div class="detail-block">
+                          <p class="detail-title mono">最近历史 · HISTORY</p>
+                          <p v-if="!(detail.histories || []).length" class="detail-line dim">暂无占卜记录</p>
+                          <ul v-else class="history-list history-scroll">
+                            <li v-for="(h, i) in detail.histories" :key="i" class="mono">
+                              <span class="h-type" :data-type="h.type">{{ historyTypeName(h.type) }}</span>
+                              <span class="h-title">{{ h.title || '（无摘要）' }}</span>
+                              <span class="h-date dim">{{ formatDateTime(h.createdAt) }}</span>
+                            </li>
+                          </ul>
                         </div>
                       </div>
                       <p v-else class="detail-line dim">详情加载失败 <button class="a-link mono" @click.stop="toggleUser(u.id, true)">重试</button></p>
@@ -879,6 +881,49 @@ onBeforeUnmount(() => {
   gap: 26px;
   padding: 6px 4px;
 }
+/* 顶部通栏：打卡汇总横排 */
+.checkin-block {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(139, 135, 176, 0.12);
+}
+.ck-stats {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+}
+.mini-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.mini-stat b {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+.mini-stat span {
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  color: var(--ink-dim);
+}
+.today-badge {
+  position: static;
+}
+/* 历史列表限高滚动 */
+.history-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.history-scroll::-webkit-scrollbar { width: 4px; }
+.history-scroll::-webkit-scrollbar-thumb { background: rgba(232, 196, 124, 0.25); border-radius: 2px; }
 .detail-title {
   font-size: 11px;
   letter-spacing: 0.22em;
@@ -1056,9 +1101,7 @@ onBeforeUnmount(() => {
 }
 
 /* ===== 按日使用明细 ===== */
-.usage-block {
-  grid-column: 1 / -1;
-}
+
 .usage-date {
   padding: 6px 10px;
   border: 1px solid var(--gold-hairline);
