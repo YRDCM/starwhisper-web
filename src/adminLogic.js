@@ -111,3 +111,13 @@ export function formatConfigItems(items) {
     updatedAtText: item.updatedAt ? formatDateTime(item.updatedAt) : '从未修改（默认值）'
   }))
 }
+
+/**
+ * 板块使用条宽度：按当前列表最大值归一化成百分比字符串
+ * count 为 null（未统计）时返回 '0%'，避免画出"0 次"的假条
+ */
+export function moduleBarWidth(count, list) {
+  if (count == null) return '0%'
+  const max = Math.max(1, ...(list || []).map((m) => m.count || 0), count)
+  return Math.round((count / max) * 100) + '%'
+}

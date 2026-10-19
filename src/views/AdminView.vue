@@ -72,6 +72,19 @@
               <div v-else ref="barRef" class="chart"></div>
             </div>
           </section>
+
+          <!-- 板块使用次数（全量累计；星运浏览未埋点显示「未统计」） -->
+          <section class="glass-card chart-card module-usage">
+            <h3 class="sec-title">板块使用次数 <span class="sec-title-en mono">MODULE USAGE</span></h3>
+            <div class="mu-list">
+              <div v-for="m in stats.moduleUsage || []" :key="m.key" class="mu-row">
+                <span class="mu-name">{{ m.name }}</span>
+                <div class="mu-track"><div class="mu-bar" :class="{ none: m.count == null }" :style="{ width: muWidth(m) }"></div></div>
+                <span class="mu-count mono">{{ m.count == null ? '未统计' : m.count }}</span>
+              </div>
+            </div>
+            <p class="mu-hint">累计真实行为次数；「星运浏览」未做埋点，显示未统计而非 0</p>
+          </section>
         </template>
       </section>
 
@@ -218,7 +231,7 @@ import {
 } from '../api'
 import {
   buildStatCards, buildUsersQuery, formatConfigItems, formatDateTime,
-  historyTypeName, mergeDailySeries, signNameOf, totalPages
+  historyTypeName, mergeDailySeries, moduleBarWidth, signNameOf, totalPages
 } from '../adminLogic'
 
 const KEY_STORE = 'starwhisper:adminkey'
@@ -293,6 +306,8 @@ async function loadStats() {
 }
 
 const cards = computed(() => buildStatCards(stats.value))
+// 板块使用条宽度（按列表最大值归一化）
+const muWidth = (m) => moduleBarWidth(m.count, stats.value?.moduleUsage || [])
 
 /* ===== ECharts ===== */
 const lineRef = ref(null)
@@ -940,5 +955,55 @@ onBeforeUnmount(() => {
   .config-row { grid-template-columns: 1fr; }
   .config-feedback { grid-column: 1; }
   .users-table th:nth-child(3), .users-table td:nth-child(3) { display: none; }
+}
+
+/* ===== 板块使用次数 ===== */
+.module-usage {
+  margin-top: 22px;
+}
+.mu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.mu-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.mu-name {
+  flex: none;
+  width: 88px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.mu-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(139, 135, 176, 0.12);
+  overflow: hidden;
+}
+.mu-bar {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(232, 196, 124, 0.35), #E8C47C);
+  transition: width 0.4s ease;
+}
+.mu-bar.none {
+  background: transparent;
+}
+.mu-count {
+  flex: none;
+  width: 64px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--gold);
+}
+.mu-hint {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--ink-dim2);
 }
 </style>

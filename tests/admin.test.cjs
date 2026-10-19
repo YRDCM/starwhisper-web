@@ -204,3 +204,12 @@ test('整页冒烟：用户 tab 搜索/翻页/展开详情，配置 tab 保存�
   assert.match(item.feedback, /已保存/)
   assert.match(item.updatedAtText, /^\d{4}-\d{2}-\d{2}/)
 })
+
+test('moduleBarWidth：按最大值归一化，null（未统计）画 0 宽', () => {
+  const list = [{ count: 47 }, { count: 28 }, { count: null }]
+  assert.equal(logic.moduleBarWidth(47, list), '100%')
+  assert.equal(logic.moduleBarWidth(28, list), '60%')
+  assert.equal(logic.moduleBarWidth(null, list), '0%')  // 未统计不出假条
+  assert.equal(logic.moduleBarWidth(5, []), '100%')     // 空列表兜底 max=1
+  assert.equal(logic.moduleBarWidth(0, list), '0%')
+})
