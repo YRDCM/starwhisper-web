@@ -383,7 +383,10 @@ function renderCharts() {
 
   if (lineRef.value) {
     const merged = mergeDailySeries(s.dailyNewUsers, s.dailyActive)
-    lineChart = lineChart || echarts.init(lineRef.value)
+    // v-if 切 tab 会销毁 chart div：切回时 lineRef 是新 DOM，旧实例绑在死节点上，
+    // 必须重建（lineChart || init 的缓存写法会导致切回后空白）
+    if (lineChart) { lineChart.dispose(); lineChart = null }
+    lineChart = echarts.init(lineRef.value)
     lineChart.setOption({
       tooltip: TIP,
       legend: {
@@ -429,7 +432,8 @@ function renderCharts() {
 
   const dist = (s.spreadDist || [])
   if (barRef.value && dist.length) {
-    barChart = barChart || echarts.init(barRef.value)
+    if (barChart) { barChart.dispose(); barChart = null } // 同 lineChart：切 tab 后必须重建
+    barChart = echarts.init(barRef.value)
     barChart.setOption({
       tooltip: { ...TIP, trigger: 'item' },
       grid: { left: 10, right: 40, top: 10, bottom: 10, containLabel: true },
