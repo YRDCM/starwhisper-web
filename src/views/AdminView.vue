@@ -73,6 +73,25 @@
             </div>
           </section>
 
+          <!-- 今日板块使用：登录用户 vs 游客（2026-10-20 起有埋点） -->
+          <section class="glass-card chart-card today-usage">
+            <h3 class="sec-title">今日板块使用 <span class="sec-title-en mono">TODAY · USERS vs GUESTS</span>
+              <span class="guest-badge mono">活跃游客 {{ stats.todayGuestActive ?? 0 }} IP</span></h3>
+            <table class="usage-table">
+              <thead>
+                <tr><th>板块</th><th>登录用户</th><th>游客</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in stats.todayModuleSplit || []" :key="m.key">
+                  <td>{{ m.name }}</td>
+                  <td class="mono num">{{ m.user }}</td>
+                  <td class="mono num guest">{{ m.guest }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="mu-hint">埋点自 2026-10-20 起记录，历史数据不含此前游客行为；游客按 IP 去重</p>
+          </section>
+
           <!-- 板块使用次数（全量累计；星运浏览未埋点显示「未统计」） -->
           <section class="glass-card chart-card module-usage">
             <h3 class="sec-title">板块使用次数 <span class="sec-title-en mono">MODULE USAGE</span></h3>
@@ -1154,5 +1173,49 @@ onBeforeUnmount(() => {
   border-style: dashed;
   border-color: rgba(139, 135, 176, 0.25);
   background: transparent;
+}
+
+/* ===== 今日板块使用（登录 vs 游客） ===== */
+.today-usage {
+  margin-top: 22px;
+}
+.guest-badge {
+  margin-left: 12px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #7FA8BF;
+  border: 1px solid rgba(127, 168, 191, 0.35);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.usage-table th {
+  text-align: left;
+  font-weight: normal;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--ink-dim2);
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(139, 135, 176, 0.15);
+}
+.usage-table td {
+  padding: 8px 10px;
+  color: var(--ink);
+  border-bottom: 1px solid rgba(139, 135, 176, 0.08);
+}
+.usage-table td.num {
+  text-align: right;
+  color: var(--gold);
+}
+.usage-table td.guest {
+  color: #7FA8BF;
+}
+.usage-table th:nth-child(2), .usage-table th:nth-child(3) {
+  text-align: right;
 }
 </style>
