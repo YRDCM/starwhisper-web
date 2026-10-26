@@ -76,6 +76,7 @@
           <!-- 今日板块使用：登录用户 vs 游客（2026-10-20 起有埋点） -->
           <section class="glass-card chart-card today-usage">
             <h3 class="sec-title">今日板块使用 <span class="sec-title-en mono">TODAY · USERS vs GUESTS</span>
+              <span class="guest-badge mono">活跃用户 {{ stats.todayUserIps ?? 0 }} IP</span>
               <span class="guest-badge mono">活跃游客 {{ stats.todayGuestActive ?? 0 }} IP</span></h3>
             <table class="usage-table">
               <thead>
@@ -89,7 +90,7 @@
                 </tr>
               </tbody>
             </table>
-            <p class="mu-hint">埋点自 2026-10-20 起记录，历史数据不含此前游客行为；游客按 IP 去重</p>
+            <p class="mu-hint">埋点自 2026-10-20 起记录，历史数据不含此前游客行为；均按 IP 去重，IP 当日登录后不再计为游客</p>
           </section>
 
           <!-- 板块使用次数（全量累计；星运浏览未埋点显示「未统计」） -->
