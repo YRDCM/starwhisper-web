@@ -18,10 +18,67 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY)
 }
 
+/* ===== 后台管理 key =====
+ * 来源不变：仍是 localStorage 记忆 + 后台页输入框（键名沿用 starwhisper:adminkey），
+ * 但传输方式统一改成 X-Admin-Key 请求头 —— 后端已停止接受 query 传 key 的通道。
+ * 之所以不拼 query：query 会进 Nginx access log、浏览器历史、Referer。
+ * 全站后台接口的注入点只有下面的 request 拦截器一处，调用方无需再关心密钥。
+ */
+const ADMIN_KEY_STORE = 'starwhisper:adminkey'
+const ADMIN_KEY_HEADER = 'X-Admin-Key'
+// localStorage 不可用（隐私模式 / 禁用存储）时的本次会话兜底
+let adminKeyMemory = ''
+
+/** 读取当前管理密钥；空串表示没有 key（请求不带该头，由后端 403 兜底） */
+export function getAdminKey() {
+  try {
+    return localStorage.getItem(ADMIN_KEY_STORE) || adminKeyMemory
+  } catch {
+    return adminKeyMemory
+  }
+}
+
+/** 写入 / 清除管理密钥（clear 传空串），同时更新持久化与内存兜底 */
+export function setAdminKey(key) {
+  adminKeyMemory = key ? String(key) : ''
+  try {
+    if (adminKeyMemory) localStorage.setItem(ADMIN_KEY_STORE, adminKeyMemory)
+    else localStorage.removeItem(ADMIN_KEY_STORE)
+  } catch {
+    // 存储不可用：只保留内存态，刷新后需重新输入
+  }
+}
+
+/** 是否为后台接口路径：/admin/xxx、/api/admin/xxx；绝对 URL 同样适用 */
+function isAdminRequestUrl(url) {
+  if (!url) return false
+  const path = String(url).split('?')[0].split('#')[0]
+  return /\/admin(\/|$)/.test(path) // 要求 admin 段完整，避免 /administrator 之类误判
+}
+
+/**
+ * 给后台请求挂上 X-Admin-Key 头（拆成纯函数便于单测）：
+ * - 按 URL 自动识别后台接口，新增的 /admin/** 调用无需额外标记也会被覆盖；
+ * - 兜底删除误传的 params.key，保证密钥绝不回落到 query。
+ */
+export function attachAdminKey(config) {
+  if (config.admin !== true && !isAdminRequestUrl(config.url)) return config
+  config.headers = config.headers || {}
+  const key = getAdminKey()
+  if (key) config.headers[ADMIN_KEY_HEADER] = key
+  else delete config.headers[ADMIN_KEY_HEADER]
+  if (config.params && typeof config.params === 'object' && 'key' in config.params) {
+    const params = { ...config.params }
+    delete params.key
+    config.params = params
+  }
+  return config
+}
+
 http.interceptors.request.use((config) => {
   const token = getToken()
   if (token) config.headers.Authorization = 'Bearer ' + token
-  return config
+  return attachAdminKey(config)
 })
 
 // 统一拆包：code 200（旧契约）或 0（新契约，如 checkin/summary）均视为成功；
@@ -164,34 +221,35 @@ export function fetchHexagramToday(openid) {
   return http.get('/hexagram/today', { params: openid ? { openid } : {} })
 }
 
-/** 后台统计（管理 key）：{userCount, todayNewUsers, todayActive, checkinTotal,
+/** 后台统计：{userCount, todayNewUsers, todayActive, checkinTotal,
  *  todayCheckins, tarotTotal, baguaTotal, matchTotal, spreadDist:[{spread,count}],
- *  dailyNewUsers/dailyActive:[{date,count}], aiTodayUsed, aiGlobalLimit, aiGlobalRemaining, subscribeActive} */
-export function fetchAdminStats(key) {
-  return http.get('/admin/stats', { params: { key } })
+ *  dailyNewUsers/dailyActive:[{date,count}], aiTodayUsed, aiGlobalLimit, aiGlobalRemaining, subscribeActive}
+ *  鉴权：X-Admin-Key 头由请求拦截器统一注入 */
+export function fetchAdminStats() {
+  return http.get('/admin/stats')
 }
 
 /** 后台用户分页：{list, total, page, size}；params 由 buildUsersQuery 组装（page/size/keyword?） */
-export function fetchAdminUsers(key, params) {
-  return http.get('/admin/users', { params: { ...params, key } })
+export function fetchAdminUsers(params) {
+  return http.get('/admin/users', { params })
 }
 
 /** 后台用户详情：{user, checkin, histories:[{type,title,createdAt}]} */
-export function fetchAdminUserDetail(key, id) {
-  return http.get(`/admin/users/${id}`, { params: { key } })
+export function fetchAdminUserDetail(id) {
+  return http.get(`/admin/users/${id}`)
 }
 
 /** 后台某用户某天的功能使用明细：{date, modules:[{key,name,count}], events:[{time,type,title}]} */
-export function fetchAdminUserDailyUsage(key, id, date) {
-  return http.get(`/admin/users/${id}/daily-usage`, { params: date ? { key, date } : { key } })
+export function fetchAdminUserDailyUsage(id, date) {
+  return http.get(`/admin/users/${id}/daily-usage`, { params: date ? { date } : {} })
 }
 
 /** 后台配置项列表：[{key, value, desc, updatedAt}] */
-export function fetchAdminConfig(key) {
-  return http.get('/admin/config', { params: { key } })
+export function fetchAdminConfig() {
+  return http.get('/admin/config')
 }
 
-/** 更新配置项：body {key: 配置项, value}；管理 key 走 query */
-export function saveAdminConfig(adminKey, configKey, value) {
-  return http.put('/admin/config', { key: configKey, value }, { params: { key: adminKey } })
+/** 更新配置项：body {key: 配置项, value}（body 里的 key 是配置项名，不是鉴权密钥） */
+export function saveAdminConfig(configKey, value) {
+  return http.put('/admin/config', { key: configKey, value })
 }

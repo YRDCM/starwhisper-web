@@ -274,14 +274,13 @@ import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import * as echarts from 'echarts'
 import {
   fetchAdminStats, fetchAdminUsers, fetchAdminUserDetail, fetchAdminUserDailyUsage,
-  fetchAdminConfig, saveAdminConfig
+  fetchAdminConfig, saveAdminConfig, getAdminKey, setAdminKey
 } from '../api'
 import {
   buildStatCards, buildUsersQuery, formatConfigItems, formatDateTime,
   historyTypeName, mergeDailySeries, moduleBarWidth, signNameOf, totalPages
 } from '../adminLogic'
 
-const KEY_STORE = 'starwhisper:adminkey'
 const MONO = '"Space Mono", "Noto Sans SC", monospace'
 const PAGE_SIZE = 20
 
@@ -291,15 +290,15 @@ const TABS = [
   { key: 'config', cn: '配置', en: 'CONFIG' }
 ]
 
-/* ===== Key 门禁（入口保持原状：localStorage 记忆 + 页面输入） ===== */
-const adminKey = ref(localStorage.getItem(KEY_STORE) || '')
-const gated = ref(!adminKey.value)
+/* ===== Key 门禁（入口保持原状：localStorage 记忆 + 页面输入）
+ * 密钥的读写统一走 api.js 的 getAdminKey/setAdminKey，
+ * 实际传递由 axios 请求拦截器注入 X-Admin-Key 头，页面里不再经手 query。 ===== */
+const gated = ref(!getAdminKey())
 const keyInput = ref('')
 const gateError = ref('')
 
 function submitKey() {
-  adminKey.value = keyInput.value
-  localStorage.setItem(KEY_STORE, adminKey.value)
+  setAdminKey(keyInput.value)
   gated.value = false
   gateError.value = ''
   loadStats()
@@ -308,8 +307,7 @@ function submitKey() {
 /** 401/403 统一回门禁；返回 true 表示已处理 */
 function handleAuthError(e) {
   if (e && (e.code === 401 || e.status === 401 || e.status === 403)) {
-    localStorage.removeItem(KEY_STORE)
-    adminKey.value = ''
+    setAdminKey('') // 清掉失效 key（localStorage + 拦截器读取的内存态）
     gated.value = true
     gateError.value = 'Key 无效，请重新输入'
     return true
@@ -341,7 +339,7 @@ async function loadStats() {
   statsLoading.value = true
   statsError.value = ''
   try {
-    stats.value = await fetchAdminStats(adminKey.value)
+    stats.value = await fetchAdminStats()
   } catch (e) {
     if (handleAuthError(e)) return
     statsError.value = e.message || '统计接口暂不可用'
@@ -492,7 +490,7 @@ async function loadUsers() {
   usersLoading.value = true
   usersError.value = ''
   try {
-    const data = await fetchAdminUsers(adminKey.value, buildUsersQuery(page.value, PAGE_SIZE, keyword.value))
+    const data = await fetchAdminUsers(buildUsersQuery(page.value, PAGE_SIZE, keyword.value))
     usersList.value = data.list || []
     usersTotal.value = data.total || 0
     page.value = data.page ?? page.value
@@ -533,7 +531,7 @@ async function loadUsage(userId) {
   if (!userId) return
   usageLoading.value = true
   try {
-    usage.value = await fetchAdminUserDailyUsage(adminKey.value, userId, usageDate.value)
+    usage.value = await fetchAdminUserDailyUsage(userId, usageDate.value)
   } catch (e) {
     if (handleAuthError(e)) return
     usage.value = null
@@ -555,7 +553,7 @@ async function toggleUser(id, force) {
   usageDate.value = todayStr // 每次展开默认看今天
   detailLoading.value = true
   try {
-    detail.value = await fetchAdminUserDetail(adminKey.value, id)
+    detail.value = await fetchAdminUserDetail(id)
   } catch (e) {
     if (handleAuthError(e)) return
     detail.value = null
@@ -575,7 +573,7 @@ async function loadConfig() {
   configLoading.value = true
   configError.value = ''
   try {
-    configItems.value = formatConfigItems(await fetchAdminConfig(adminKey.value))
+    configItems.value = formatConfigItems(await fetchAdminConfig())
     configLoaded.value = true
   } catch (e) {
     if (handleAuthError(e)) return
@@ -590,7 +588,7 @@ async function saveConfig(c) {
   c.feedback = ''
   c.feedbackBad = false
   try {
-    const saved = await saveAdminConfig(adminKey.value, c.key, c.input)
+    const saved = await saveAdminConfig(c.key, c.input)
     c.value = saved.value
     c.input = saved.value
     c.updatedAtText = formatDateTime(saved.updatedAt)

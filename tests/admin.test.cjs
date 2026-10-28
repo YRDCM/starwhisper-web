@@ -98,8 +98,14 @@ function setupAdminPage(storage, api) {
     .match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import[\s\S]*?from '..\/(api|adminLogic)'$/gm, '')
     .replace(/^import \* as echarts from 'echarts'$/gm, '')
   const charts = []
+  // 密钥读写与 api.js 同源（localStorage 记忆）；页面本身不再直接碰 localStorage 与 query
+  const getAdminKey = () => storage['starwhisper:adminkey'] ?? ''
+  const setAdminKey = (key) => {
+    if (key) storage['starwhisper:adminkey'] = String(key)
+    else delete storage['starwhisper:adminkey']
+  }
   const context = {
-    ref, computed, nextTick, onBeforeUnmount,
+    ref, computed, nextTick, onBeforeUnmount, getAdminKey, setAdminKey,
     echarts: { init: () => { const c = { setOption(o) { this.option = o }, resize() {}, dispose() {} }; charts.push(c); return c } },
     fetchAdminStats: api.stats, fetchAdminUsers: api.users,
     fetchAdminUserDetail: api.userDetail, fetchAdminUserDailyUsage: api.dailyUsage,
@@ -160,18 +166,18 @@ test('整页冒烟：用户 tab 搜索/翻页/展开详情，配置 tab 保存�
   const calls = []
   const api = {
     stats: async () => STATS,
-    users: async (key, params) => {
+    users: async (params) => {
       calls.push(params)
       return { list: [{ id: 1, nickname: '星野', signNameEn: 'aries', createdAt: '2026-10-01T10:00:00', totalCheckins: 5, currentStreak: 2, lastActiveAt: null }], total: 41, page: params.page, size: params.size }
     },
     userDetail: async () => ({ user: { id: 1, nickname: '星野' }, checkin: { currentStreak: 2, maxStreak: 4, totalDays: 5, todayChecked: true }, histories: [{ type: 'TAROT', title: '单牌指引', createdAt: '2026-10-18T20:00:00' }] }),
-    dailyUsage: async (key, id, date) => ({
+    dailyUsage: async (id, date) => ({
       userId: id, date: date || '2026-10-19',
       modules: [{ key: 'tarot', name: '塔罗抽牌', count: 2 }, { key: 'fortune', name: '星运浏览', count: null }],
       events: [{ time: '09:00', type: 'TAROT', title: '单牌指引' }]
     }),
     config: async () => [{ key: 'ai.perIpDailyLimit', value: '3', desc: '每 IP 限额', updatedAt: null }],
-    saveConfig: async (adminKey, configKey, value) => ({ key: configKey, value, desc: '', updatedAt: '2026-10-19T14:00:00' })
+    saveConfig: async (configKey, value) => ({ key: configKey, value, desc: '', updatedAt: '2026-10-19T14:00:00' })
   }
   const context = setupAdminPage(storage, api)
   await new Promise((r) => setTimeout(r, 0)) // 总览先加载完
