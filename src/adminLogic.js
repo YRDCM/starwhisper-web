@@ -51,6 +51,10 @@ export function buildStatCards(stats) {
     { key: 'userCount', label: '总用户', en: 'USERS', value: num(s.userCount), gold: true },
     { key: 'todayNewUsers', label: '今日新增', en: 'NEW TODAY', value: num(s.todayNewUsers) },
     { key: 'todayActive', label: '今日活跃', en: 'ACTIVE TODAY', value: num(s.todayActive) },
+    // 今日游客：口径是「当天有行为的游客去重 IP 数」（后端字段 todayGuestActive）。
+    // 副标题故意不用英文、改用中文说明口径——这个数字很容易被误读：
+    // 手机网络换 IP 会把同一个人算成多个，公共 NAT 又会把多个人算成一个。
+    { key: 'todayGuestActive', label: '今日游客', en: 'GUEST TODAY', value: num(s.todayGuestActive), hint: '按 IP 去重' },
     { key: 'todayCheckins', label: '今日打卡', en: 'CHECKINS TODAY', value: num(s.todayCheckins) },
     { key: 'tarotTotal', label: '塔罗', en: 'TAROT', value: num(s.tarotTotal) },
     { key: 'baguaTotal', label: '起卦', en: 'BAGUA', value: num(s.baguaTotal) },

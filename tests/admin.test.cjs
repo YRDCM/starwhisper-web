@@ -24,20 +24,38 @@ test('totalPages：总页数至少为 1', () => {
 
 test('buildStatCards：缺数据时显示 0，AI 用量带 已用/上限 与剩余提示', () => {
   const empty = logic.buildStatCards(null)
-  assert.equal(empty.length, 9)
+  assert.equal(empty.length, 10)
   assert.equal(empty[0].value, 0) // 总用户缺省 0
   const ai = empty.find((c) => c.key === 'ai')
   assert.equal(ai.value, '0/0')
   assert.equal(ai.hint, '剩余 0')
 
   const real = logic.buildStatCards({
-    userCount: 1286, todayNewUsers: 17, todayActive: 243, todayCheckins: 89,
+    userCount: 1286, todayNewUsers: 17, todayActive: 243, todayGuestActive: 96,
+    todayCheckins: 89,
     tarotTotal: 3312, baguaTotal: 51, matchTotal: 7,
     aiTodayUsed: 12, aiGlobalLimit: 100, aiGlobalRemaining: 88, subscribeActive: 34
   })
   assert.equal(real[0].value, 1286)
   assert.equal(real.find((c) => c.key === 'ai').value, '12/100')
   assert.equal(real.find((c) => c.key === 'subscribeActive').value, 34)
+  assert.equal(real.find((c) => c.key === 'todayGuestActive').value, 96)
+})
+
+test('今日游客卡片：紧跟今日活跃，且副标题写明「按 IP 去重」口径', () => {
+  const cards = logic.buildStatCards({ todayActive: 5, todayGuestActive: 3 })
+  const idx = cards.findIndex((c) => c.key === 'todayGuestActive')
+  assert.ok(idx > 0, '应该存在今日游客卡片')
+  assert.equal(cards[idx - 1].key, 'todayActive', '今日游客应紧跟在今日活跃之后（今日指标放在一起）')
+
+  const guest = cards[idx]
+  assert.equal(guest.label, '今日游客')
+  assert.equal(guest.value, 3)
+  // 这个数字容易被误读（同一人换 IP 会重复计，公共 NAT 会合并），副标题必须说明口径
+  assert.match(guest.hint, /IP/, '副标题要说明是按 IP 去重：' + guest.hint)
+
+  // 缺字段时按 0 显示，不能出现 undefined
+  assert.equal(logic.buildStatCards({}).find((c) => c.key === 'todayGuestActive').value, 0)
 })
 
 test('mergeDailySeries：新增与活跃按日期对齐，缺口补 0', () => {
@@ -147,7 +165,8 @@ test('整页冒烟：过门禁后总览加载并渲染图表', async () => {
   await new Promise((r) => setTimeout(r, 0))
   assert.equal(context.page.gated.value, false)
   assert.equal(context.page.stats.value.userCount, 1286)
-  assert.equal(context.page.cards.value.length, 9)
+  assert.equal(context.page.cards.value.length, 10)
+  assert.ok(context.page.cards.value.some((c) => c.key === 'todayGuestActive'), '今日游客卡片应该渲染出来')
   assert.equal(context.__charts.length, 2) // 折线 + 横向条形
 })
 
