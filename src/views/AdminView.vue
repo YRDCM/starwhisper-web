@@ -83,8 +83,8 @@
                 <tr><th>板块</th><th>登录用户</th><th>游客</th></tr>
               </thead>
               <tbody>
-                <tr v-for="m in stats.todayModuleSplit || []" :key="m.key">
-                  <td>{{ m.name }}</td>
+                <tr v-for="m in stats.todayModuleSplit || []" :key="m.key" :class="{ off: m.offline }">
+                  <td>{{ m.name }}<span v-if="m.offline" class="off-tag mono">已下线</span></td>
                   <td class="mono num">{{ m.user }}</td>
                   <td class="mono num guest">{{ m.guest }}</td>
                 </tr>
@@ -97,13 +97,14 @@
           <section class="glass-card chart-card module-usage">
             <h3 class="sec-title">板块使用次数 <span class="sec-title-en mono">MODULE USAGE</span></h3>
             <div class="mu-list">
-              <div v-for="m in stats.moduleUsage || []" :key="m.key" class="mu-row">
+              <!-- 已下线模块靠「灰色 + 名字后面不换行」表达，不再把「（已下线）」塞进 88px 的标签列 -->
+              <div v-for="m in stats.moduleUsage || []" :key="m.key" class="mu-row" :class="{ off: m.offline }">
                 <span class="mu-name">{{ m.name }}</span>
                 <div class="mu-track"><div class="mu-bar" :class="{ none: m.count == null }" :style="{ width: muWidth(m) }"></div></div>
                 <span class="mu-count mono">{{ m.count == null ? '未统计' : m.count }}</span>
               </div>
             </div>
-            <p class="mu-hint">累计真实行为次数；「星运浏览」未做埋点，显示未统计而非 0</p>
+            <p class="mu-hint">累计真实行为次数；灰色为已下线板块（数据保留用于对照）；「星运浏览」未做埋点，显示未统计而非 0</p>
           </section>
         </template>
       </section>
@@ -1111,6 +1112,32 @@ onBeforeUnmount(() => {
   width: 88px;
   font-size: 13px;
   color: var(--ink);
+}
+/* 已下线板块：整行压暗。名字不再带「（已下线）」后缀——88px 的标签列放不下，会折成两行 */
+.mu-row.off .mu-name {
+  color: var(--ink-dim2);
+}
+.mu-row.off .mu-count {
+  color: var(--ink-dim2);
+}
+.mu-row.off .mu-bar {
+  background: rgba(139, 135, 176, 0.35);
+}
+/* 小标签：只用在宽度充足的表格里，列表靠灰色表达 */
+.off-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim2);
+  border: 1px solid rgba(139, 135, 176, 0.28);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.usage-table tr.off td {
+  color: var(--ink-dim2);
 }
 .mu-track {
   flex: 1;
