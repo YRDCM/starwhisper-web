@@ -69,6 +69,7 @@ const dimensions = computed(() =>
 
 const chartRef = ref(null)
 let chart = null
+let resizeObserver = null
 
 // 等宽字体栈（图表标签统一 Space Mono，中文自动回落系统字体）
 const MONO = '"Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace'
@@ -123,6 +124,9 @@ onMounted(() => {
   chart = echarts.init(chartRef.value)
   render()
   window.addEventListener('resize', handleResize)
+  // 图表区随卡片弹性伸缩（吃掉右栏残余空白），高度变化时重绘雷达
+  resizeObserver = new ResizeObserver(() => chart && chart.resize())
+  resizeObserver.observe(chartRef.value)
 })
 
 // 切换星座后 fortune 对象变化 → 更新图表
@@ -130,6 +134,7 @@ watch(() => props.fortune, render, { deep: true })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  resizeObserver && resizeObserver.disconnect()
   chart && chart.dispose()
 })
 </script>
@@ -156,8 +161,8 @@ onBeforeUnmount(() => {
 }
 .chart {
   width: 100%;
-  height: 260px; /* 标签放大后略加高，避免拥挤 */
-  flex: none;
+  flex: 1 1 260px; /* 弹性撑满卡片剩余高度，吃掉右栏空白 */
+  min-height: 260px;
 }
 
 /* ✦ 居中饰线（与运势卡同款） */

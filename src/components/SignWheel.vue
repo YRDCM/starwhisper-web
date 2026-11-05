@@ -204,8 +204,8 @@ function nodeStyle(i) {
   line-height: 1.2;
 }
 .sign-dates {
-  font-size: 12px;
-  letter-spacing: 0.02em;
+  font-size: 11px; /* 缩小避免贴圆形底座边缘 */
+  letter-spacing: 0;
   color: var(--ink-dim2);
   white-space: nowrap;
 }

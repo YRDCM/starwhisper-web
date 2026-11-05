@@ -53,11 +53,12 @@ function buildOption() {
       textStyle: { color: '#A9A4CC', fontFamily: MONO, fontSize: 13 },
       inactiveColor: 'rgba(139, 135, 176, 0.3)',
       itemWidth: 16,
-      itemHeight: 1,
+      itemHeight: 2,
+      itemGap: 20, // 图例项拉开间距，避免挤在一起
       icon: 'rect',
-      top: 0
+      top: 6
     },
-    grid: { left: 36, right: 18, top: 44, bottom: 30 },
+    grid: { left: 36, right: 18, top: 48, bottom: 30 },
     xAxis: {
       type: 'category',
       data: dates,

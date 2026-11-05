@@ -341,9 +341,9 @@ onMounted(() => { if (!isAdmin.value) init() }) // 后台页无需拉运势
 .page {
   position: relative;
   z-index: 1;
-  max-width: 1120px;
+  max-width: 1240px; /* 宽屏下舒展一点，减少左右空旷与卡片拥挤 */
   margin: 0 auto;
-  padding: 36px 24px 48px;
+  padding: 36px 32px 48px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
