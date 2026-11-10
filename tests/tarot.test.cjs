@@ -9,7 +9,12 @@ const { ref, computed } = require('vue')
 function setup(storage = {}, api = {}) {
   const source = fs.readFileSync(path.join(__dirname, '../src/views/TarotView.vue'), 'utf8')
     .match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import .*$/gm, '')
-  const context = { ref, computed, onMounted: () => {}, onUnmounted: () => {},
+  const context = { ref, computed, onMounted: () => {}, onUnmounted: () => {}, onBeforeUnmount: () => {},
+    // 每日牌倒计时定时器：测试里桩掉，避免真实计时器悬挂
+    setInterval: () => 0, clearInterval: () => {},
+    // 游客额度墙：默认按已登录注入（测试聚焦 AI 请求行为）；游客场景用 api.guest + api.promptLogin 覆盖
+    getToken: api.guest ? () => '' : () => 'test-token',
+    promptLogin: api.promptLogin || (() => {}),
     drawTarot: api.drawTarot || (async () => ({ cards: [] })),
     fetchTarotReading: api.fetchTarotReading,
     localStorage: {
@@ -233,4 +238,21 @@ test('每日心情：写入失败不显示保存成功，重试可更新；历�
   assert.deepEqual(j(withHistory.moodCurve.value).map((p) => p.date), ['2026-01-01', '2026-01-02'])
   assert.deepEqual(j(withHistory.moodCurve.value).map((p) => p.score), [3, 4])
   assert.equal(j(withHistory.moodDist.value).length, 2)
+})
+
+test('AI 解牌：游客点击不发请求，弹登录引导', async () => {
+  let calls = 0
+  const prompts = []
+  const page = setup({}, {
+    guest: true,
+    promptLogin: (msg) => prompts.push(msg),
+    drawTarot: async () => ({ drawId: 'a', cards: [{ card: { id: 1 } }] }),
+    fetchTarotReading: async () => { calls++; return { summary: '总览', detail: '详情' } }
+  })
+  await page.doDraw()
+  page.revealAll() // 全部揭晓后按钮才可点；游客点击仍不调接口
+  await page.readWithAi()
+  assert.equal(calls, 0) // 游客不调 AI 接口
+  assert.equal(prompts.length, 1) // 改为弹登录引导
+  assert.match(prompts[0], /登录/)
 })

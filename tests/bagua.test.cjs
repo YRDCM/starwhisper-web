@@ -13,6 +13,9 @@ function setup(api = {}) {
     ref,
     onMounted: () => {},
     onUnmounted: () => {},
+    // 游客额度墙：默认按已登录注入（测试聚焦 AI 请求行为）；游客场景用 api.guest + api.promptLogin 覆盖
+    getToken: api.guest ? () => '' : () => 'test-token',
+    promptLogin: api.promptLogin || (() => {}),
     fetchBaguaDaily: api.fetchBaguaDaily || (async () => null),
     castBagua: api.castBagua || (async () => { throw new Error('未配置') }),
     fetchHexagrams: api.fetchHexagrams || (async () => []),
@@ -99,4 +102,21 @@ test('无变爻时起卦请求不带之卦', async () => {
   page.showResult.value = true
   await page.readWithAi()
   assert.equal(JSON.stringify(sent), JSON.stringify({ primarySeq: 24, changedSeq: null, changingLines: [], question: "" }))
+})
+
+test('AI 解卦：游客点击不发请求，弹登录引导', async () => {
+  let calls = 0
+  const prompts = []
+  const page = setup({
+    guest: true,
+    promptLogin: (msg) => prompts.push(msg),
+    castBagua: async () => CAST,
+    fetchBaguaReading: async () => { calls++; return { summary: '总览', detail: '详情' } }
+  })
+  await page.doCast()
+  page.showResult.value = true
+  await page.readWithAi()
+  assert.equal(calls, 0) // 游客不调 AI 接口
+  assert.equal(prompts.length, 1) // 改为弹登录引导
+  assert.match(prompts[0], /登录/)
 })

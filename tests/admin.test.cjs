@@ -24,7 +24,7 @@ test('totalPages：总页数至少为 1', () => {
 
 test('buildStatCards：缺数据时显示 0，AI 用量带 已用/上限 与剩余提示', () => {
   const empty = logic.buildStatCards(null)
-  assert.equal(empty.length, 10)
+  assert.equal(empty.length, 13) // 10 张基础卡 + 3 张留存卡
   assert.equal(empty[0].value, 0) // 总用户缺省 0
   const ai = empty.find((c) => c.key === 'ai')
   assert.equal(ai.value, '0/0')
@@ -40,6 +40,40 @@ test('buildStatCards：缺数据时显示 0，AI 用量带 已用/上限 与剩�
   assert.equal(real.find((c) => c.key === 'ai').value, '12/100')
   assert.equal(real.find((c) => c.key === 'subscribeActive').value, 34)
   assert.equal(real.find((c) => c.key === 'todayGuestActive').value, 96)
+})
+
+test('buildStatCards：留存三卡插在订阅中之前，比例为整数百分比，total 为 0 显示 —', () => {
+  const cards = logic.buildStatCards({
+    retention: {
+      nextDay: { total: 20, retained: 9 },       // 45%
+      day7: { total: 33, retained: 11 },          // 33.3% → 33%
+      guestReturn: { total: 0, returned: 0 }      // 无基数 → '—'
+    },
+    subscribeActive: 34
+  })
+  const sub = cards.findIndex((c) => c.key === 'subscribeActive')
+  assert.deepEqual(
+    cards.slice(sub - 3, sub).map((c) => c.key),
+    ['retentionD1', 'retentionD7', 'guestReturn'],
+    '留存三卡应紧跟在订阅中之前'
+  )
+  const d1 = cards[sub - 3]
+  assert.equal(d1.label, '次日留存')
+  assert.equal(d1.value, '45%')
+  assert.equal(d1.hint, '昨日新增 20 · 今日回访 9')
+  const d7 = cards[sub - 2]
+  assert.equal(d7.value, '33%')
+  assert.equal(d7.hint, '7日前新增 33 · 今日回访 11')
+  const guest = cards[sub - 1]
+  assert.equal(guest.label, '游客回访')
+  assert.equal(guest.value, '—') // total 为 0 不出假比例
+  assert.equal(guest.hint, '昨日游客 0 IP · 今日再现 0')
+
+  // retention 字段整体缺失：三卡仍在，比例均为 '—'
+  const noRetention = logic.buildStatCards({})
+  assert.equal(noRetention.find((c) => c.key === 'retentionD1').value, '—')
+  assert.equal(noRetention.find((c) => c.key === 'retentionD7').value, '—')
+  assert.equal(noRetention.find((c) => c.key === 'guestReturn').value, '—')
 })
 
 test('今日游客卡片：紧跟今日活跃，且副标题写明「按 IP 去重」口径', () => {
@@ -165,8 +199,9 @@ test('整页冒烟：过门禁后总览加载并渲染图表', async () => {
   await new Promise((r) => setTimeout(r, 0))
   assert.equal(context.page.gated.value, false)
   assert.equal(context.page.stats.value.userCount, 1286)
-  assert.equal(context.page.cards.value.length, 10)
+  assert.equal(context.page.cards.value.length, 13) // 10 张基础卡 + 3 张留存卡
   assert.ok(context.page.cards.value.some((c) => c.key === 'todayGuestActive'), '今日游客卡片应该渲染出来')
+  assert.ok(context.page.cards.value.some((c) => c.key === 'retentionD1'), '次日留存卡片应该渲染出来')
   assert.equal(context.__charts.length, 2) // 折线 + 横向条形
 })
 

@@ -64,7 +64,46 @@ export function buildStatCards(stats) {
       value: `${num(s.aiTodayUsed)}/${num(s.aiGlobalLimit)}`,
       hint: `剩余 ${num(s.aiGlobalRemaining)}`
     },
+    // 留存卡片：retention = { nextDay, day7, guestReturn }，各含 {total, retained/returned}；
+    // total 为 0 时比例无意义，显示 '—' 避免假 0%
+    ...buildRetentionCards(s.retention),
     { key: 'subscribeActive', label: '订阅中', en: 'SUBSCRIBED', value: num(s.subscribeActive) }
+  ]
+}
+
+/** 留存比例文本：retained/total 四舍五入整数 + '%'；total 为 0 时返回 '—' */
+function retentionPct(retained, total) {
+  const t = +total || 0
+  if (t <= 0) return '—'
+  return Math.round(((+retained || 0) / t) * 100) + '%'
+}
+
+/**
+ * 留存三卡：次日留存（D1）/ 7 日留存（D7）/ 游客回访（按 IP）。
+ * 字段缺失时按 total 0 处理（value 显示 '—'，hint 显示 0）。
+ */
+function buildRetentionCards(retention) {
+  const r = retention || {}
+  const d1 = r.nextDay || {}
+  const d7 = r.day7 || {}
+  const guest = r.guestReturn || {}
+  const nz = (v) => (+v || 0)
+  return [
+    {
+      key: 'retentionD1', label: '次日留存', en: 'D1 RETENTION',
+      value: retentionPct(d1.retained, d1.total),
+      hint: `昨日新增 ${nz(d1.total)} · 今日回访 ${nz(d1.retained)}`
+    },
+    {
+      key: 'retentionD7', label: '7 日留存', en: 'D7 RETENTION',
+      value: retentionPct(d7.retained, d7.total),
+      hint: `7日前新增 ${nz(d7.total)} · 今日回访 ${nz(d7.retained)}`
+    },
+    {
+      key: 'guestReturn', label: '游客回访', en: 'GUEST RETURN',
+      value: retentionPct(guest.returned, guest.total),
+      hint: `昨日游客 ${nz(guest.total)} IP · 今日再现 ${nz(guest.returned)}`
+    }
   ]
 }
 

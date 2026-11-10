@@ -85,6 +85,8 @@
             <p v-if="studyError" class="error-line" role="alert">{{ studyError }}</p>
           </div>
         </div>
+        <!-- 每日牌底部：到次日 0 点的实时倒计时（每秒刷新） -->
+        <p class="daily-countdown mono">每日 0 点刷新 · 距明日运势还有 {{ dailyCountdown }}</p>
       </template>
     </section>
 
@@ -273,7 +275,7 @@
         </div>
 
         <div class="ai-reading">
-          <p class="m-label">Kimi · AI 解牌 <span class="ai-badge">游客可用</span></p>
+          <p class="m-label">Kimi · AI 解牌 <span class="ai-badge">登录可用</span></p>
           <p v-if="!drawId && !aiResult" class="spread-hint">AI 解牌暂未启用，基础牌义仍可正常阅读。</p>
           <template v-else>
             <label for="tarot-question" class="spread-hint">你想梳理什么？（选填，最多 300 字）</label>
@@ -374,11 +376,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import TarotCardFace from '../components/TarotCardFace.vue'
 import TarotFlipCard from '../components/TarotFlipCard.vue'
 import MoodChart from '../components/MoodChart.vue'
-import { fetchTarotDaily, drawTarot, fetchTarotCards, fetchTarotReading } from '../api'
+import { fetchTarotDaily, drawTarot, fetchTarotCards, fetchTarotReading, getToken } from '../api'
+import { promptLogin } from '../loginPrompt'
 
 /* ===== 每日塔罗 ===== */
 const daily = ref(null)
@@ -388,6 +391,22 @@ const dailyError = ref('')
 const today = new Date()
 const todayStr = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-')
 const dailyKeywords = computed(() => splitKw(daily.value ? daily.value.keywords : ''))
+
+/* ===== 每日牌倒计时：每秒刷新到次日 0 点的 HH:MM:SS ===== */
+const dailyCountdown = ref('--:--:--')
+function tickDailyCountdown() {
+  const now = new Date()
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  const remain = Math.max(0, Math.floor((midnight - now) / 1000))
+  const p = (n) => String(n).padStart(2, '0')
+  const h = Math.floor(remain / 3600)
+  const m = Math.floor((remain % 3600) / 60)
+  const s = remain % 60
+  dailyCountdown.value = `${p(h)}:${p(m)}:${p(s)}`
+}
+tickDailyCountdown()
+const dailyCountdownTimer = setInterval(tickDailyCountdown, 1000)
+onBeforeUnmount(() => { clearInterval(dailyCountdownTimer) })
 
 async function loadDaily() {
   dailyLoading.value = true
@@ -533,6 +552,11 @@ function clearReading() {
   detailIndex.value = 0; meaningOpen.value = false
 }
 async function readWithAi() {
+  // 游客额度墙：未登录不调接口，弹登录引导（已登录行为不变）
+  if (!getToken()) {
+    promptLogin('登录后即可让 Kimi 为你解读这组牌，并保存解牌记录')
+    return
+  }
   if (!drawId.value || nextCard.value || aiLoading.value || aiResult.value) return
   const id = drawId.value
   aiLoading.value = true; aiError.value = ''
@@ -988,6 +1012,16 @@ onMounted(loadDaily) // 进入标签页即自动加载每日塔罗
 .daily-face {
   flex: none;
   width: 210px;
+}
+/* 每日牌底部倒计时：独占整行居中（.daily 为 flex-wrap 布局） */
+.daily-countdown {
+  flex: 0 0 100%;
+  text-align: center;
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim2);
+  padding-top: 16px;
+  border-top: 1px solid var(--gold-hairline);
 }
 .daily-panel {
   flex: 1;

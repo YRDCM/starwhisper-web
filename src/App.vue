@@ -147,6 +147,9 @@
     <MineView v-if="mineMounted" v-show="view === 'mine'" />
 
     <footer class="footer mono">星语 STARWHISPER · 仅供娱乐 · 愿你被星辰温柔以待 · v{{ APP_VERSION }}</footer>
+
+    <!-- 游客额度墙：全站登录引导弹窗（loginPrompt 单例驱动，Teleport 到 body） -->
+    <LoginGuideModal />
     </template>
   </div>
 </template>
@@ -167,6 +170,7 @@ import MatchView from './views/MatchView.vue'
 import MineView from './views/MineView.vue'
 import AdminView from './views/AdminView.vue'
 import CheckinButton from './components/CheckinButton.vue'
+import LoginGuideModal from './components/LoginGuideModal.vue'
 import { fetchSigns, fetchTodayFortune, fetchWeekFortune, fetchWeeklyFortune } from './api'
 
 /* ===== 后台管理页：URL #admin / #/admin 直达（不进主导航），监听 hash 变化可来回切换 ===== */

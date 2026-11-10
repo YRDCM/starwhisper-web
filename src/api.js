@@ -1,5 +1,6 @@
 // axios 封装：统一处理 /api 前缀和后端的 {code, message, data} 包装结构
 import axios from 'axios'
+import { DEV_LOGIN_TOKEN } from './config.js'
 
 const http = axios.create({
   baseURL: '/api',
@@ -185,9 +186,9 @@ export function fetchMatch(star1, star2, gender1, gender2) {
   return http.get('/match', { params })
 }
 
-/** dev 游客登录（PC 开发期通道）：body {"nickname": "可选"} */
+/** 昵称登录（PC 网页端通道）：body {"nickname": "可选"}，需带 X-Dev-Token 头 */
 export function devLogin(nickname) {
-  return http.post('/auth/dev', { nickname })
+  return http.post('/auth/dev', { nickname }, { headers: { 'X-Dev-Token': DEV_LOGIN_TOKEN } })
 }
 
 /** 今日打卡（需登录，幂等） */

@@ -96,7 +96,7 @@
         </div>
 
         <div v-if="showResult" class="ai-reading">
-          <p class="m-label">Kimi · AI 解卦 <span class="ai-badge">游客可用</span></p>
+          <p class="m-label">Kimi · AI 解卦 <span class="ai-badge">登录可用</span></p>
           <label for="bagua-question" class="spread-hint">你想问什么？（选填，最多 300 字）</label>
           <textarea id="bagua-question" v-model="aiQuestion" maxlength="300" rows="2" :disabled="aiLoading || !!aiResult"
             placeholder="例如：这次换工作，我应该注意什么？" />
@@ -170,7 +170,8 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import HexagramGlyph from '../components/HexagramGlyph.vue'
-import { fetchBaguaDaily, castBagua, fetchHexagrams, fetchBaguaReading } from '../api'
+import { fetchBaguaDaily, castBagua, fetchHexagrams, fetchBaguaReading, getToken } from '../api'
+import { promptLogin } from '../loginPrompt'
 
 const todayStr = new Date().toISOString().slice(0, 10)
 
@@ -227,6 +228,11 @@ function clearAiReading() {
 }
 
 async function readWithAi() {
+  // 游客额度墙：未登录不调接口，弹登录引导（已登录行为不变）
+  if (!getToken()) {
+    promptLogin('登录后即可让 Kimi 为你解卦，并保存解卦记录')
+    return
+  }
   const cast = castResult.value
   if (!cast || !showResult.value || aiLoading.value || aiResult.value) return
   aiLoading.value = true

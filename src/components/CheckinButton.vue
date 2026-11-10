@@ -3,8 +3,8 @@
     <!-- 头部右侧小金边按钮：三态（未登录「签到」/ 已登录未打卡「打卡」/ 已打卡「连续 N 天 ✦」） -->
     <button type="button" class="ck-btn mono" :class="{ done: status && status.todayDone }" @click="onClick">
       <template v-if="!loggedIn">签到</template>
-      <template v-else-if="status && status.todayDone">已打卡 · 连续 {{ status.streak }} 天 ✦</template>
-      <template v-else-if="status">打卡 · 连续 {{ status.streak }} 天</template>
+      <template v-else-if="status && status.todayDone">已打卡 · <template v-if="status.streak >= 2">🔥 </template>连续 {{ status.streak }} 天 ✦</template>
+      <template v-else-if="status">打卡 · <template v-if="status.streak >= 2">🔥 </template>连续 {{ status.streak }} 天</template>
       <template v-else>签到</template>
     </button>
     <!-- 打卡失败的短暂提示（3.5s 自动消失，绝对定位不占版面） -->
@@ -98,13 +98,13 @@ async function submit() {
   busy.value = true
   error.value = ''
   try {
-    // 第一步：登录。dev 通道后端已关闭（auth/dev 固定 500），
-    // 必须给出用户能看懂的提示，而不是泛泛的「无法连接服务器」
+    // 第一步：登录。昵称登录通道已重开（需 X-Dev-Token 头，见 api.js），
+    // 失败给出用户能看懂的提示，而不是泛泛的「无法连接服务器」
     let data
     try {
       data = await devLogin(nickname.value.trim() || '星语旅人')
     } catch (e) {
-      error.value = '登录服务暂未开放，敬请期待'
+      error.value = '登录失败，请稍后再试'
       return
     }
     setToken(data.token)
