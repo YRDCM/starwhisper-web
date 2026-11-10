@@ -154,6 +154,7 @@
                     <td class="mono">
                       <span class="streak" :class="{ hot: u.currentStreak > 0 }">{{ u.currentStreak }} 连</span>
                       <span class="dim"> · {{ u.totalCheckins }} 天</span>
+                      <span v-if="u.todayCheckin" class="mono today-badge">今日</span>
                     </td>
                     <td class="mono dim">{{ formatDateTime(u.lastActiveAt) }}</td>
                   </tr>
