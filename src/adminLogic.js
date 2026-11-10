@@ -56,9 +56,9 @@ export function buildStatCards(stats) {
     // 手机网络换 IP 会把同一个人算成多个，公共 NAT 又会把多个人算成一个。
     { key: 'todayGuestActive', label: '今日游客', en: 'GUEST TODAY', value: num(s.todayGuestActive), hint: '按 IP 去重' },
     { key: 'todayCheckins', label: '今日打卡', en: 'CHECKINS TODAY', value: num(s.todayCheckins) },
-    { key: 'tarotTotal', label: '塔罗', en: 'TAROT', value: num(s.tarotTotal) },
-    { key: 'baguaTotal', label: '起卦', en: 'BAGUA', value: num(s.baguaTotal) },
-    { key: 'matchTotal', label: '配对', en: 'MATCH', value: num(s.matchTotal) },
+    { key: 'tarotToday', label: '今日塔罗', en: 'TAROT TODAY', value: num(s.tarotToday) },
+    { key: 'baguaToday', label: '今日起卦', en: 'BAGUA TODAY', value: num(s.baguaToday) },
+    { key: 'matchToday', label: '今日配对', en: 'MATCH TODAY', value: num(s.matchToday) },
     {
       key: 'ai', label: 'AI 今日用量', en: 'AI QUOTA',
       value: `${num(s.aiTodayUsed)}/${num(s.aiGlobalLimit)}`,
