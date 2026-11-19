@@ -15,6 +15,20 @@ test('buildUsersQuery：分页参数钳制与 keyword 组装', () => {
   assert.ok(!('keyword' in logic.buildUsersQuery(0, 20, ''))) // 空词不传，避免无意义模糊查询
 })
 
+test('buildUsersQuery：今日打卡筛选只在开启时下发参数', () => {
+  // 关着的时候不能传 todayCheckin=false —— 少一个键，请求 URL 更干净
+  assert.ok(!('todayCheckin' in logic.buildUsersQuery(0, 20, '', false)))
+  assert.ok(!('todayCheckin' in logic.buildUsersQuery(0, 20, ''))) // undefined 同样视为关闭
+
+  // 开启时与关键词可以叠加（后端是 SQL 层组合筛选，不是二选一）
+  assert.deepEqual(
+    logic.buildUsersQuery(0, 20, '', true),
+    { page: 0, size: 20, todayCheckin: true })
+  assert.deepEqual(
+    logic.buildUsersQuery(1, 50, '星语', true),
+    { page: 1, size: 50, keyword: '星语', todayCheckin: true })
+})
+
 test('totalPages：总页数至少为 1', () => {
   assert.equal(logic.totalPages(0, 20), 1)
   assert.equal(logic.totalPages(20, 20), 1)

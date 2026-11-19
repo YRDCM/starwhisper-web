@@ -21,15 +21,18 @@ export function historyTypeName(type) {
 
 /**
  * 用户列表查询参数组装：page 负值钳到 0，size 钳到 1..50（与后端上限一致），
- * keyword 去空格，空字符串不传（避免无意义的模糊查询）
+ * keyword 去空格，空字符串不传（避免无意义的模糊查询）。
+ * todayCheckin 为真时只查「今日已打卡」的用户——筛选由后端在 SQL 层完成，
+ * 这样分页条数与总数才是准的（在内存里过滤会把每页条数和总数都算错）。
  */
-export function buildUsersQuery(page, size, keyword) {
+export function buildUsersQuery(page, size, keyword, todayCheckin) {
   const p = Number.isFinite(+page) ? Math.max(0, Math.floor(+page)) : 0
   let s = Number.isFinite(+size) ? Math.floor(+size) : 20
   s = s <= 0 ? 20 : Math.min(s, 50)
   const query = { page: p, size: s }
   const kw = (keyword || '').trim()
   if (kw) query.keyword = kw
+  if (todayCheckin) query.todayCheckin = true
   return query
 }
 

@@ -114,16 +114,25 @@
         <div class="glass-card users-card">
           <div class="users-toolbar">
             <h3 class="sec-title">用户管理 <span class="sec-title-en mono">USERS · {{ usersTotal }}</span></h3>
-            <form class="search-form" @submit.prevent="searchUsers">
-              <input
-                v-model="keywordInput"
-                class="search-input mono"
-                type="text"
-                placeholder="按昵称搜索"
-                autocomplete="off"
-              />
-              <button type="submit" class="a-btn a-btn-sm">搜索</button>
-            </form>
+            <div class="users-actions">
+              <button
+                type="button"
+                class="a-btn a-btn-sm filter-toggle"
+                :class="{ on: todayCheckinOnly }"
+                :aria-pressed="todayCheckinOnly"
+                @click="toggleTodayCheckin"
+              >今日打卡</button>
+              <form class="search-form" @submit.prevent="searchUsers">
+                <input
+                  v-model="keywordInput"
+                  class="search-input mono"
+                  type="text"
+                  placeholder="按昵称搜索"
+                  autocomplete="off"
+                />
+                <button type="submit" class="a-btn a-btn-sm">搜索</button>
+              </form>
+            </div>
           </div>
 
           <div v-if="usersLoading" class="a-state"><div class="spinner"></div></div>
@@ -490,6 +499,8 @@ const usersTotal = ref(0)
 const page = ref(0)
 const keywordInput = ref('')
 const keyword = ref('') // 已生效的搜索词（输入框内容未必已提交）
+// 只显示今日已打卡的用户（后端在 SQL 层筛选，分页与总数才准确）
+const todayCheckinOnly = ref(false)
 const usersLoaded = ref(false)
 const usersLoading = ref(false)
 const usersError = ref('')
@@ -500,7 +511,9 @@ async function loadUsers() {
   usersLoading.value = true
   usersError.value = ''
   try {
-    const data = await fetchAdminUsers(buildUsersQuery(page.value, PAGE_SIZE, keyword.value))
+    const data = await fetchAdminUsers(
+      buildUsersQuery(page.value, PAGE_SIZE, keyword.value, todayCheckinOnly.value)
+    )
     usersList.value = data.list || []
     usersTotal.value = data.total || 0
     page.value = data.page ?? page.value
@@ -515,6 +528,14 @@ async function loadUsers() {
 
 function searchUsers() {
   keyword.value = keywordInput.value
+  page.value = 0
+  expandedId.value = null
+  loadUsers()
+}
+
+/** 切换「只看今日打卡」：重置到第一页并收起已展开的行，避免停留在不存在的页码上 */
+function toggleTodayCheckin() {
+  todayCheckinOnly.value = !todayCheckinOnly.value
   page.value = 0
   expandedId.value = null
   loadUsers()
@@ -843,6 +864,18 @@ onBeforeUnmount(() => {
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 14px;
+}
+.users-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* 今日打卡筛选：选中态用金色实底，和「搜索」这类普通按钮区分开 */
+.filter-toggle.on {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #14122E;
 }
 .users-toolbar .sec-title { margin-bottom: 0; }
 .search-form { display: flex; gap: 10px; }
