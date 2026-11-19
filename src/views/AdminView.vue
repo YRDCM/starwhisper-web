@@ -130,6 +130,14 @@
           <p v-else-if="usersError" class="error-line pad">{{ usersError }} <button class="a-link mono" @click="loadUsers">重试</button></p>
           <template v-else>
             <table class="users-table">
+              <!-- 固定列宽：配合 CSS 的 table-layout: fixed，展开行内容再长也不会改变列宽 -->
+              <colgroup>
+                <col style="width: 24%" />
+                <col style="width: 12%" />
+                <col style="width: 22%" />
+                <col style="width: 20%" />
+                <col style="width: 22%" />
+              </colgroup>
               <thead>
                 <tr class="mono">
                   <th>旅人</th>
@@ -854,6 +862,9 @@ onBeforeUnmount(() => {
 
 .users-table {
   width: 100%;
+  /* 关键：auto 布局下列宽由内容撑出，展开行（colspan=5 里塞了网格、长日期、标签）
+     会让浏览器重算所有列宽，整张表跟着横向抖动。fixed + colgroup 把列宽钉死。 */
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 13.5px;
 }
@@ -870,6 +881,8 @@ onBeforeUnmount(() => {
   padding: 12px;
   border-bottom: 1px solid rgba(139, 135, 176, 0.1);
   color: var(--ink);
+  /* 列宽固定后，长昵称/长串只能换行，不能把列撑开 */
+  overflow-wrap: anywhere;
 }
 .user-row { cursor: pointer; transition: background 0.2s; }
 .user-row:hover { background: rgba(232, 196, 124, 0.05); }
@@ -905,6 +918,10 @@ onBeforeUnmount(() => {
   gap: 26px;
   padding: 6px 4px;
 }
+/* 列宽已钉死，网格子项必须允许收缩，否则长日期/芯片列表会溢出到下一列 */
+.detail-grid > * {
+  min-width: 0;
+}
 /* 顶部通栏：打卡汇总横排 */
 .checkin-block {
   grid-column: 1 / -1;
@@ -920,6 +937,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 34px;
+  /* 窄屏时三个大数字 + 今日徽章会挤爆一行，允许换行而不是横向撑出去 */
+  flex-wrap: wrap;
 }
 .mini-stat {
   display: flex;
